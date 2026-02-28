@@ -44,11 +44,13 @@ async function handleOffscreenMessage(msg: {
       // Let user still hear the call
       tabSource.connect(audioContext.destination);
 
+      let micCaptured = false;
       if (captureMic) {
         try {
           micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           const micSource = audioContext.createMediaStreamSource(micStream);
           micSource.connect(destination);
+          micCaptured = true;
         } catch (err) {
           console.warn("Microphone capture failed:", err);
         }
@@ -65,7 +67,7 @@ async function handleOffscreenMessage(msg: {
       };
 
       recorder.start(5000);
-      return { ok: true };
+      return { ok: true, micCaptured };
     }
 
     case "OFFSCREEN_STOP": {

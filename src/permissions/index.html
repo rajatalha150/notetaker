@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notetaker - Permissions</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #0a0a0a;
+        color: #e5e5e5;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+      }
+      .container {
+        text-align: center;
+        max-width: 400px;
+        padding: 2rem;
+      }
+      h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+      p { color: #999; margin-bottom: 1.5rem; }
+      button {
+        background: #dc2626;
+        color: white;
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      button:hover { background: #b91c1c; }
+      .status { margin-top: 1rem; font-size: 0.875rem; }
+      .granted { color: #22c55e; }
+      .denied { color: #ef4444; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Notetaker Permissions</h1>
+      <p>Notetaker needs microphone access to record your voice during meetings.</p>
+      <button id="grant">Allow Microphone Access</button>
+      <div id="status" class="status"></div>
+    </div>
+    <script src="./permissions.ts" type="module"></script>
+  </body>
+</html>

@@ -16,26 +16,33 @@ export function StatusIndicator({
   status: RecordingStatus;
   duration: number;
 }) {
-  const colors: Record<RecordingStatus, string> = {
+  const dotClass: Record<RecordingStatus, string> = {
     idle: "bg-gray-500",
-    recording: "bg-red-500 animate-pulse",
+    recording: "bg-red-500 animate-dot-pulse",
     paused: "bg-yellow-500",
     stopped: "bg-gray-500",
   };
 
   const labels: Record<RecordingStatus, string> = {
-    idle: "Ready",
+    idle: "Ready to record",
     recording: "Recording",
     paused: "Paused",
     stopped: "Stopped",
   };
 
+  const labelColors: Record<RecordingStatus, string> = {
+    idle: "text-gray-400",
+    recording: "text-red-400",
+    paused: "text-yellow-400",
+    stopped: "text-gray-400",
+  };
+
   return (
-    <div className="flex items-center gap-2 mb-3">
-      <span className={`w-2.5 h-2.5 rounded-full ${colors[status]}`} />
-      <span className="text-sm font-medium">{labels[status]}</span>
+    <div className="flex items-center gap-2 mb-4 px-1">
+      <span className={`w-2 h-2 rounded-full ${dotClass[status]}`} />
+      <span className={`text-xs font-medium ${labelColors[status]}`}>{labels[status]}</span>
       {status !== "idle" && (
-        <span className="ml-auto text-sm font-mono text-gray-400">
+        <span className="ml-auto text-sm font-mono text-gray-300 tabular-nums">
           {formatDuration(duration)}
         </span>
       )}
