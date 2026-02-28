@@ -31,7 +31,7 @@ async function ensureOffscreenDocument() {
   if (contexts.length > 0) return;
   await chrome.offscreen.createDocument({
     url: "src/offscreen/offscreen.html",
-    reasons: [chrome.offscreen.Reason.USER_MEDIA],
+    reasons: [chrome.offscreen.Reason.USER_MEDIA, chrome.offscreen.Reason.AUDIO_PLAYBACK],
     justification: "Recording tab audio and microphone",
   });
 }

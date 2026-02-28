@@ -16,6 +16,16 @@ export function RecordingControls({
   resumeRecording,
 }: Props) {
   const handleStart = async () => {
+    // Request mic permission from popup (which can show the browser prompt).
+    // Offscreen documents cannot prompt for permissions on their own.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Immediately stop — we just needed the permission grant.
+      stream.getTracks().forEach((t) => t.stop());
+    } catch {
+      // User denied mic — proceed without mic (tab audio only)
+    }
+
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
       await startRecording(tab.id, true);
