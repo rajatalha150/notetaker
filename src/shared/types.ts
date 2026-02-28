@@ -1,0 +1,53 @@
+export type RecordingStatus = "idle" | "recording" | "paused" | "stopped";
+
+export interface RecordingMeta {
+  id: string;
+  title: string;
+  startedAt: number;
+  stoppedAt?: number;
+  duration: number;
+  status: RecordingStatus;
+  platform?: string;
+  notes: Note[];
+  transcription?: Transcription;
+  summary?: string;
+  downloadId?: number;
+  filename?: string;
+}
+
+export interface Note {
+  id: string;
+  text: string;
+  timestamp: number; // ms offset from recording start
+  createdAt: number;
+}
+
+export interface Transcription {
+  segments: TranscriptionSegment[];
+  fullText: string;
+  language?: string;
+}
+
+export interface TranscriptionSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface Settings {
+  whisperApiKey: string;
+  claudeApiKey: string;
+  whisperModel: string;
+  claudeModel: string;
+  audioFormat: "webm" | "ogg";
+  captureMic: boolean;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  whisperApiKey: "",
+  claudeApiKey: "",
+  whisperModel: "whisper-1",
+  claudeModel: "claude-sonnet-4-6-20250220",
+  audioFormat: "webm",
+  captureMic: true,
+};
