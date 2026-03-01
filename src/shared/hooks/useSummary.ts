@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { summarizeTranscript } from "../api/claude";
+import { summarizeTranscript } from "../api/providers";
 import { getRecording, saveRecording } from "../storage/metadata";
 
 export function useSummary(recordingId: string | undefined) {

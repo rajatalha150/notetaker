@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { transcribeAudio } from "../api/whisper";
-import { diarizeSpeakers } from "../api/claude";
+import { transcribe, diarizeSpeakers } from "../api/providers";
 import { getRecording, saveRecording } from "../storage/metadata";
 import type { Transcription } from "../types";
 
@@ -17,9 +16,9 @@ export function useTranscription(recordingId: string | undefined) {
     enabled: !!recordingId,
   });
 
-  const transcribe = useMutation({
+  const transcribeMutation = useMutation({
     mutationFn: async (file: File) => {
-      const result = await transcribeAudio(file);
+      const result = await transcribe(file);
       try {
         const diarized = await diarizeSpeakers(result.segments);
         return { ...result, segments: diarized };
@@ -40,8 +39,8 @@ export function useTranscription(recordingId: string | undefined) {
 
   return {
     transcription,
-    transcribe: transcribe.mutate,
-    isTranscribing: transcribe.isPending,
-    transcriptionError: transcribe.error,
+    transcribe: transcribeMutation.mutate,
+    isTranscribing: transcribeMutation.isPending,
+    transcriptionError: transcribeMutation.error,
   };
 }

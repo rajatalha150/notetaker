@@ -35,20 +35,29 @@ export interface TranscriptionSegment {
   speaker?: string;
 }
 
+export type Provider = "openai" | "anthropic" | "gemini" | "groq";
+
 export interface Settings {
-  whisperApiKey: string;
-  claudeApiKey: string;
-  whisperModel: string;
-  claudeModel: string;
+  providers: {
+    openai?: string;
+    anthropic?: string;
+    gemini?: string;
+    groq?: string;
+  };
+  transcriptionProvider: Provider;
+  transcriptionModel: string;
+  summarizationProvider: Provider;
+  summarizationModel: string;
   audioFormat: "webm" | "ogg";
   captureMic: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  whisperApiKey: "",
-  claudeApiKey: "",
-  whisperModel: "whisper-1",
-  claudeModel: "claude-sonnet-4-6-20250220",
+  providers: {},
+  transcriptionProvider: "openai",
+  transcriptionModel: "whisper-1",
+  summarizationProvider: "anthropic",
+  summarizationModel: "claude-sonnet-4-6-20250220",
   audioFormat: "webm",
   captureMic: true,
 };
