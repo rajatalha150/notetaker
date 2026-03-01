@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getSettings, saveSettings } from "@shared/storage/settings";
 import type { Settings } from "@shared/types";
 import { DEFAULT_SETTINGS } from "@shared/types";
+import { TRANSCRIPTION_MODELS, SUMMARIZATION_MODELS } from "@shared/api/models";
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -20,6 +21,9 @@ export function SettingsPage() {
   const update = (key: keyof Settings, value: string | boolean) => {
     setSettings((s) => ({ ...s, [key]: value }));
   };
+
+  const selectClass =
+    "w-full px-3 py-2 bg-gray-800 border border-gray-700/50 rounded-md text-sm focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500/20 transition-colors text-gray-300";
 
   return (
     <div className="max-w-md space-y-6 animate-fade-in">
@@ -49,6 +53,42 @@ export function SettingsPage() {
               placeholder="sk-ant-..."
             />
             <p className="text-xs text-gray-600 mt-1">Used for Claude summarization</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Models Section */}
+      <section>
+        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Models</h3>
+        <div className="space-y-3 bg-gray-900/50 rounded-lg p-4 border border-gray-800/50">
+          <div>
+            <label className="block text-sm text-gray-300 mb-1.5">Transcription Model</label>
+            <select
+              value={settings.whisperModel}
+              onChange={(e) => update("whisperModel", e.target.value)}
+              className={selectClass}
+            >
+              {TRANSCRIPTION_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1.5">Summarization Model</label>
+            <select
+              value={settings.claudeModel}
+              onChange={(e) => update("claudeModel", e.target.value)}
+              className={selectClass}
+            >
+              {SUMMARIZATION_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </section>

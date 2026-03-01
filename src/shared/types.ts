@@ -32,6 +32,7 @@ export interface TranscriptionSegment {
   start: number;
   end: number;
   text: string;
+  speaker?: string;
 }
 
 export interface Settings {

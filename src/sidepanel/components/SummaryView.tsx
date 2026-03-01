@@ -22,9 +22,24 @@ export function SummaryView({ summary }: { summary?: string }) {
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
-      <div className="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4 text-sm leading-relaxed whitespace-pre-wrap text-gray-300">
-        {summary}
-      </div>
+      <div
+        className="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4 text-sm leading-relaxed text-gray-300 prose prose-invert prose-sm max-w-none prose-headings:text-gray-200 prose-headings:text-sm prose-headings:font-medium prose-headings:mt-3 prose-headings:mb-1 prose-li:my-0 prose-ul:my-1 prose-p:my-1"
+        dangerouslySetInnerHTML={{ __html: renderMarkdown(summary) }}
+      />
     </div>
   );
+}
+
+function renderMarkdown(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
+    .replace(/\n{2,}/g, "<br/><br/>")
+    .replace(/\n/g, "<br/>");
 }

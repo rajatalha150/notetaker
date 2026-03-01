@@ -21,8 +21,9 @@ export function useSummary(recordingId: string | undefined) {
       const meta = await getRecording(recordingId);
       if (!meta?.transcription) throw new Error("Transcription required first");
       return summarizeTranscript(
-        meta.transcription.fullText,
-        meta.notes.map((n) => n.text)
+        meta.transcription,
+        meta.notes.map((n) => n.text),
+        { duration: meta.duration, platform: meta.platform }
       );
     },
     onSuccess: async (data: string) => {

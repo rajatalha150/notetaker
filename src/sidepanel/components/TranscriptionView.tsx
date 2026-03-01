@@ -1,6 +1,26 @@
 import { useState } from "react";
 import type { Transcription } from "@shared/types";
 
+const SPEAKER_COLORS: Record<string, string> = {};
+const COLOR_PALETTE = [
+  "bg-blue-500/20 text-blue-300",
+  "bg-green-500/20 text-green-300",
+  "bg-purple-500/20 text-purple-300",
+  "bg-orange-500/20 text-orange-300",
+  "bg-pink-500/20 text-pink-300",
+  "bg-cyan-500/20 text-cyan-300",
+];
+let colorIndex = 0;
+
+function getSpeakerColor(speaker: string): string {
+  const existing = SPEAKER_COLORS[speaker];
+  if (existing) return existing;
+  const color = COLOR_PALETTE[colorIndex % COLOR_PALETTE.length]!;
+  SPEAKER_COLORS[speaker] = color;
+  colorIndex++;
+  return color;
+}
+
 export function TranscriptionView({ transcription }: { transcription?: Transcription }) {
   const [copied, setCopied] = useState(false);
 
@@ -26,6 +46,13 @@ export function TranscriptionView({ transcription }: { transcription?: Transcrip
             <span className="text-[10px] text-gray-600 font-mono mr-2 tabular-nums">
               {formatTime(seg.start)}
             </span>
+            {seg.speaker && (
+              <span
+                className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded mr-2 ${getSpeakerColor(seg.speaker)}`}
+              >
+                {seg.speaker}
+              </span>
+            )}
             <span className="text-gray-300">{seg.text}</span>
           </p>
         ))}

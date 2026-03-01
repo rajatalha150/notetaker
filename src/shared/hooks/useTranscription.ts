@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { transcribeAudio } from "../api/whisper";
+import { diarizeSpeakers } from "../api/claude";
 import { getRecording, saveRecording } from "../storage/metadata";
 import type { Transcription } from "../types";
 
@@ -18,7 +19,13 @@ export function useTranscription(recordingId: string | undefined) {
 
   const transcribe = useMutation({
     mutationFn: async (file: File) => {
-      return transcribeAudio(file);
+      const result = await transcribeAudio(file);
+      try {
+        const diarized = await diarizeSpeakers(result.segments);
+        return { ...result, segments: diarized };
+      } catch {
+        return result;
+      }
     },
     onSuccess: async (data: Transcription) => {
       if (!recordingId) return;
