@@ -43,7 +43,14 @@ self.addEventListener("message", async (e: MessageEvent) => {
                 return_full_text: false,
             });
 
-            self.postMessage({ type: "done", result: res[0].generated_text });
+            let outputText = res[0].generated_text;
+            if (Array.isArray(outputText)) {
+                outputText = outputText[outputText.length - 1].content || "";
+            } else if (typeof outputText === "string") {
+                outputText = outputText.trim();
+            }
+
+            self.postMessage({ type: "done", result: outputText });
         } catch (error: any) {
             self.postMessage({ type: "error", error: error.message || String(error) });
         }

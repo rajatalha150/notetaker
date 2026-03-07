@@ -61,9 +61,24 @@ export function SettingsPage() {
     }));
   };
 
-  const configuredProviders = API_PROVIDERS.filter(
-    (p) => settings.providers[p.id] && settings.providersEnabled?.[p.id as keyof typeof settings.providersEnabled] !== false
-  ).map((p) => p.id);
+  const toggleCloudProviders = (enabled: boolean) => {
+    setSettings((s) => {
+      const updates: Partial<Settings> = { enableCloudProviders: enabled };
+      if (!enabled) {
+        updates.transcriptionProvider = "local";
+        updates.transcriptionModel = getTranscriptionModels("local")[0]?.id || "Xenova/whisper-tiny.en";
+        updates.summarizationProvider = "local";
+        updates.summarizationModel = getChatModels("local")[0]?.id || "Xenova/Qwen1.5-0.5B-Chat";
+      }
+      return { ...s, ...updates } as Settings;
+    });
+  };
+
+  const configuredProviders = settings.enableCloudProviders
+    ? API_PROVIDERS.filter(
+      (p) => settings.providers[p.id] && settings.providersEnabled?.[p.id as keyof typeof settings.providersEnabled] !== false
+    ).map((p) => p.id)
+    : [];
 
   const transcriptionProviders = getProvidersWithCapability("transcription").filter((p) => configuredProviders.includes(p) || p === "local");
   const summarizationProviders = getProvidersWithCapability("chat").filter((p) => configuredProviders.includes(p) || p === "local");
@@ -77,51 +92,65 @@ export function SettingsPage() {
   return (
     <div className="max-w-md space-y-6 animate-fade-in">
       <section>
-        <div className="mb-3">
-          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">API Keys Setup</h3>
-          <p className="text-[11px] text-gray-500 mt-1">Configure your active API keys. You can use different providers for transcribing audio and generating summaries.</p>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Cloud API Providers</h3>
+            <p className="text-[11px] text-gray-500 mt-1">Configure external API keys for cloud transcription & summaries.</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer ml-4">
+            <input
+              type="checkbox"
+              checked={settings.enableCloudProviders}
+              onChange={(e) => toggleCloudProviders(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-7 h-4 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:bg-green-600 transition-colors" />
+            <div className="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-3" />
+          </label>
         </div>
 
-        <div className="space-y-2.5">
-          {API_PROVIDERS.map((p) => (
-            <div key={p.id} className="bg-gray-900/40 rounded-lg p-3 border border-gray-800/60">
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-semibold text-gray-200">{p.label}</label>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.providersEnabled?.[p.id as keyof typeof settings.providersEnabled] !== false}
-                      onChange={(e) => updateProviderEnabled(p.id, e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-7 h-4 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:bg-green-600 transition-colors" />
-                    <div className="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-3" />
-                  </label>
+        {settings.enableCloudProviders && (
+          <div className="space-y-2.5 animate-in slide-in-from-top-2 fade-in duration-200">
+            {API_PROVIDERS.map((p) => (
+              <div key={p.id} className="bg-gray-900/40 rounded-lg p-3 border border-gray-800/60">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-semibold text-gray-200">{p.label}</label>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.providersEnabled?.[p.id as keyof typeof settings.providersEnabled] !== false}
+                        onChange={(e) => updateProviderEnabled(p.id, e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-7 h-4 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:bg-green-600 transition-colors" />
+                      <div className="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-3" />
+                    </label>
+                  </div>
+                  <a
+                    href={p.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 px-2 py-0.5 rounded-full"
+                  >
+                    Get API Key &rarr;
+                  </a>
                 </div>
-                <a
-                  href={p.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 px-2 py-0.5 rounded-full"
-                >
-                  Get API Key &rarr;
-                </a>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] text-gray-400 flex-1">{p.summary}</p>
+                  <span className="text-[10px] items-center text-gray-500 font-medium bg-gray-800 px-1.5 py-0.5 rounded ml-2">{p.caps}</span>
+                </div>
+                <input
+                  type="password"
+                  value={settings.providers[p.id] ?? ""}
+                  onChange={(e) => updateProvider(p.id, e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-gray-950/50 border border-gray-700/50 rounded text-xs focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500/20 transition-colors placeholder:text-gray-600 font-mono"
+                  placeholder={PROVIDER_PLACEHOLDERS[p.id]}
+                />
               </div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] text-gray-400 flex-1">{p.summary}</p>
-                <span className="text-[10px] items-center text-gray-500 font-medium bg-gray-800 px-1.5 py-0.5 rounded ml-2">{p.caps}</span>
-              </div>
-              <input
-                type="password"
-                value={settings.providers[p.id] ?? ""}
-                onChange={(e) => updateProvider(p.id, e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-gray-950/50 border border-gray-700/50 rounded text-xs focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500/20 transition-colors placeholder:text-gray-600 font-mono"
-                placeholder={PROVIDER_PLACEHOLDERS[p.id]}
-              />
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section>

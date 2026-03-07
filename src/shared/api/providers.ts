@@ -479,7 +479,17 @@ ${transcript}`,
   try {
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) return segments;
-    const labels: string[] = JSON.parse(jsonMatch[0]);
+    const array = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(array)) return segments;
+
+    const labels = array.map((item: any) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        return item.speaker || item.label || item.name || item.value || JSON.stringify(item);
+      }
+      return String(item) || "Unknown";
+    });
+
     return segments.map((seg, i) => ({
       ...seg,
       speaker: labels[i] ?? seg.speaker,

@@ -59,6 +59,7 @@ export interface Settings {
   transcriptionModel: string;
   summarizationProvider: Provider;
   summarizationModel: string;
+  enableCloudProviders: boolean;
   audioFormat: "webm" | "ogg";
   captureMic: boolean;
 }
@@ -70,6 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
   transcriptionModel: "Xenova/whisper-tiny.en",
   summarizationProvider: "local",
   summarizationModel: "Xenova/Qwen1.5-0.5B-Chat",
+  enableCloudProviders: false,
   audioFormat: "webm",
   captureMic: true,
 };

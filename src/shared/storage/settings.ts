@@ -14,7 +14,10 @@ interface LegacySettings {
 
 function migrate(raw: LegacySettings & Partial<Settings>): Settings {
   // Already migrated
-  if (raw.providers) return { ...DEFAULT_SETTINGS, ...raw } as Settings;
+  if (raw.providers) {
+    const hasAnyKey = Object.values(raw.providers).some((v) => !!v);
+    return { ...DEFAULT_SETTINGS, ...raw, enableCloudProviders: raw.enableCloudProviders ?? hasAnyKey } as Settings;
+  }
 
   // Migrate from legacy flat keys
   return {
@@ -27,6 +30,7 @@ function migrate(raw: LegacySettings & Partial<Settings>): Settings {
     transcriptionModel: raw.whisperModel || DEFAULT_SETTINGS.transcriptionModel,
     summarizationProvider: "anthropic",
     summarizationModel: raw.claudeModel || DEFAULT_SETTINGS.summarizationModel,
+    enableCloudProviders: !!(raw.whisperApiKey || raw.claudeApiKey),
     audioFormat: raw.audioFormat || DEFAULT_SETTINGS.audioFormat,
     captureMic: raw.captureMic ?? DEFAULT_SETTINGS.captureMic,
   };
