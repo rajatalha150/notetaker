@@ -13,7 +13,7 @@ A Chrome extension that silently records, transcribes, and summarizes your video
 - **Speaker Diarization** — Automatically identifies and labels distinct speakers
 - **AI Summarization** — Generates structured meeting summaries with key decisions, action items, and follow-ups
 - **Timestamped Notes** — Jot notes during the call, each tagged with the recording timestamp
-- **Multi-Provider AI** — Use any combination of OpenAI, Anthropic, Google Gemini, or Groq — a single API key is enough
+- **Multi-Provider AI & Local Models** — Use securely running local models directly inside your browser for completely offline functionality, or connect cloud providers like OpenAI, Anthropic, Google Gemini, Groq, Together AI, and Deepgram!
 - **Direct Download** — Audio files save straight to your Downloads folder, no cloud storage
 
 ## Supported AI Providers
@@ -22,10 +22,13 @@ A Chrome extension that silently records, transcribes, and summarizes your video
 |----------|:---:|:---:|
 | OpenAI | ✓ | ✓ |
 | Anthropic | — | ✓ |
-| Google Gemini | — | ✓ |
+| Google Gemini | ✓ | ✓ |
 | Groq | ✓ | ✓ |
+| Together AI | — | ✓ |
+| Deepgram | ✓ | — |
+| Local In-Browser | ✓ | ✓ |
 
-Only one API key is needed to get started. For example, a single Groq key handles both transcription and summarization.
+Use private offline WebAssembly models or any combination of cloud API providers to transcribe and summarize your meetings securely.
 
 ## Architecture
 
@@ -61,7 +64,7 @@ Chrome MV3 service workers can't access DOM or media APIs. The service worker ob
 ### Prerequisites
 
 - Node.js 18+
-- A supported API key (OpenAI, Anthropic, Gemini, or Groq)
+- An optional supported API key (OpenAI, Anthropic, Gemini, Groq, Together AI, Deepgram) OR use the default offline Local AI.
 
 ### Install & Run
 
@@ -133,11 +136,12 @@ src/
 | Build | Vite 5 + CRXJS |
 | Storage | `chrome.storage.local` |
 | Audio | `chrome.tabCapture` + WebAudio + MediaRecorder |
-| AI | OpenAI, Anthropic, Google Gemini, Groq |
+| AI | Transformers.js (Local), OpenAI, Anthropic, Google Gemini, Groq, Together AI, Deepgram |
 
 ## Privacy
 
 - Audio is recorded locally and downloaded directly to your computer
+- Highly Sensitive calls can use the **Local (On-Device)** AI pipeline, ensuring voice/text never touches a server.
 - No audio is stored in the browser after download
 - AI API calls only happen when you explicitly trigger transcription/summarization
 - API keys are stored locally in `chrome.storage.local`
@@ -156,4 +160,5 @@ src/
 
 ## License
 
-MIT
+Copyright (c) 2026 Peak Services Inc. All rights reserved. 
+Visit [peakservices-inc.com](https://peakservices-inc.com) for more information.
