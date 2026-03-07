@@ -5,10 +5,13 @@ env.allowLocalModels = false;
 env.useBrowserCache = true;
 
 // Configure ONNX backend to avoid external CDN requests
-if (env.backends.onnx.wasm) {
-    env.backends.onnx.wasm.wasmPaths = "/ort-wasm/";
-    env.backends.onnx.wasm.numThreads = 1; // Avoid threaded.js worker requirement
-}
+const safeEnv = env as any;
+if (!safeEnv.backends) safeEnv.backends = {};
+if (!safeEnv.backends.onnx) safeEnv.backends.onnx = {};
+if (!safeEnv.backends.onnx.wasm) safeEnv.backends.onnx.wasm = {};
+
+safeEnv.backends.onnx.wasm.wasmPaths = "/ort-wasm/";
+safeEnv.backends.onnx.wasm.numThreads = 1;
 
 class PipelineSingleton {
     static instance: any = null;
@@ -17,6 +20,8 @@ class PipelineSingleton {
         if (this.instance === null) {
             this.instance = await pipeline("automatic-speech-recognition", model, {
                 progress_callback,
+                device: "wasm",
+                dtype: "q8",
             });
         }
         return this.instance;

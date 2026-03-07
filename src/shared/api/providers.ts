@@ -194,6 +194,81 @@ async function transcribeLocal(audioBlob: Blob, model: string): Promise<Transcri
   };
 }
 
+async function transcribeDeepgram(audioBlob: Blob, model: string, apiKey: string): Promise<Transcription> {
+  const res = await fetch(`https://api.deepgram.com/v1/listen?model=${model}&smart_format=true&diarize=true`, {
+    method: "POST",
+    headers: { Authorization: `Token ${apiKey}`, "Content-Type": "audio/webm" },
+    body: audioBlob,
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Deepgram API error: ${res.status} ${err}`);
+  }
+
+  const data = await res.json();
+  const text = data.results?.channels[0]?.alternatives[0]?.transcript || "";
+  const words = data.results?.channels[0]?.alternatives[0]?.words || [];
+
+  return {
+    fullText: text,
+    segments: words.map((w: any) => ({
+      start: w.start,
+      end: w.end,
+      text: w.punctuated_word || w.word,
+      speaker: w.speaker !== undefined ? `Speaker ${w.speaker}` : undefined,
+    })),
+  };
+}
+
+const blobToBase64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.readAsDataURL(blob);
+  reader.onload = () => {
+    if (typeof reader.result === "string") {
+      resolve(reader.result.split(",")[1] ?? "");
+    } else {
+      reject(new Error("Failed to read blob as string"));
+    }
+  };
+  reader.onerror = error => reject(error);
+});
+
+async function transcribeGemini(audioBlob: Blob, model: string, apiKey: string): Promise<Transcription> {
+  const base64Audio = await blobToBase64(audioBlob);
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: "Transcribe the following audio accurately. Reply ONLY with the raw transcript." },
+              { inlineData: { mimeType: "audio/webm", data: base64Audio } }
+            ]
+          }
+        ]
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini transcription error: ${res.status} ${err}`);
+  }
+
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+  return {
+    fullText: text,
+    segments: [{ start: 0, end: 0, text }]
+  };
+}
+
 export async function transcribe(audioBlob: Blob): Promise<Transcription> {
   const settings = await getSettings();
   const provider = settings.transcriptionProvider;
@@ -209,6 +284,10 @@ export async function transcribe(audioBlob: Blob): Promise<Transcription> {
       return transcribeOpenAI(audioBlob, model, apiKey!);
     case "groq":
       return transcribeGroq(audioBlob, model, apiKey!);
+    case "deepgram":
+      return transcribeDeepgram(audioBlob, model, apiKey!);
+    case "gemini":
+      return transcribeGemini(audioBlob, model, apiKey!);
     default:
       throw new Error(`${provider} does not support transcription`);
   }
@@ -301,23 +380,78 @@ async function chatGroq(prompt: string, model: string, apiKey: string, maxTokens
   return data.choices[0].message.content;
 }
 
+async function chatTogether(prompt: string, model: string, apiKey: string, maxTokens: number): Promise<string> {
+  const res = await fetch("https://api.together.xyz/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Together API error: ${res.status} ${err}`);
+  }
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
+// @ts-expect-error Vite worker import
+import ChatWorker from "./chatWorker?worker";
+let localChatWorker: Worker | null = null;
+async function chatLocal(prompt: string, model: string, maxTokens: number): Promise<string> {
+  if (!localChatWorker) {
+    localChatWorker = new ChatWorker();
+  }
+
+  return new Promise((resolve, reject) => {
+    const handler = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg.type === "done") {
+        localChatWorker!.removeEventListener("message", handler);
+        resolve(msg.result);
+      } else if (msg.type === "error") {
+        localChatWorker!.removeEventListener("message", handler);
+        reject(new Error(msg.error));
+      }
+    };
+
+    localChatWorker!.addEventListener("message", handler);
+    // Format messages natively as HuggingFace expects for chatting
+    const messages = [
+      { role: "system", content: "You are a helpful assistant that summarizes meeting transcripts clearly and concisely in markdown." },
+      { role: "user", content: prompt }
+    ];
+    localChatWorker!.postMessage({ type: "chat", messages, model, maxTokens });
+  });
+}
+
 async function chatCompletion(prompt: string, maxTokens = 2048): Promise<string> {
   const settings = await getSettings();
   const provider = settings.summarizationProvider;
   const model = settings.summarizationModel;
   const apiKey = settings.providers[provider];
 
-  if (!apiKey) throw new Error(`${provider} API key not set`);
+  if (provider !== "local" && !apiKey) throw new Error(`${provider} API key not set`);
 
   switch (provider) {
+    case "local":
+      return chatLocal(prompt, model, maxTokens);
     case "openai":
-      return chatOpenAI(prompt, model, apiKey, maxTokens);
+      return chatOpenAI(prompt, model, apiKey!, maxTokens);
     case "anthropic":
-      return chatAnthropic(prompt, model, apiKey, maxTokens);
+      return chatAnthropic(prompt, model, apiKey!, maxTokens);
     case "gemini":
-      return chatGemini(prompt, model, apiKey, maxTokens);
+      return chatGemini(prompt, model, apiKey!, maxTokens);
     case "groq":
-      return chatGroq(prompt, model, apiKey, maxTokens);
+      return chatGroq(prompt, model, apiKey!, maxTokens);
+    case "together":
+      return chatTogether(prompt, model, apiKey!, maxTokens);
     default:
       throw new Error(`${provider} does not support summarization`);
   }

@@ -22,6 +22,7 @@ function migrate(raw: LegacySettings & Partial<Settings>): Settings {
       openai: raw.whisperApiKey || undefined,
       anthropic: raw.claudeApiKey || undefined,
     },
+    providersEnabled: {},
     transcriptionProvider: "openai",
     transcriptionModel: raw.whisperModel || DEFAULT_SETTINGS.transcriptionModel,
     summarizationProvider: "anthropic",

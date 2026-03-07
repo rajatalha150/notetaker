@@ -30,7 +30,10 @@ export function SummaryView({ summary }: { summary?: string }) {
   );
 }
 
-function renderMarkdown(text: string): string {
+function renderMarkdown(text: string | any): string {
+  if (typeof text !== "string") {
+    text = String(text) || "";
+  }
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -39,7 +42,7 @@ function renderMarkdown(text: string): string {
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/^- (.+)$/gm, "<li>$1</li>")
-    .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
+    .replace(/(<li>.*<\/li>\n?)+/g, (match: string) => `<ul>${match}</ul>`)
     .replace(/\n{2,}/g, "<br/><br/>")
     .replace(/\n/g, "<br/>");
 }
