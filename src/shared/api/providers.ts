@@ -17,23 +17,27 @@ function formatDuration(ms: number): string {
   return `${h}h ${m}m`;
 }
 
-async function decodeAudio16k(blob: Blob): Promise<Float32Array> {
+async function decodeAudio16kStereo(blob: Blob): Promise<{ left: Float32Array; right: Float32Array | null }> {
   const arrayBuffer = await blob.arrayBuffer();
   const audioContext = new window.AudioContext({ sampleRate: 16000 });
   const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-  const numChannels = audioBuffer.numberOfChannels;
-  if (numChannels === 1) {
-    return audioBuffer.getChannelData(0);
+  const left = audioBuffer.getChannelData(0);
+  let right: Float32Array | null = null;
+
+  if (audioBuffer.numberOfChannels >= 2) {
+    right = audioBuffer.getChannelData(1);
+
+    // Check if the right channel is essentially silent (e.g. if mic was off)
+    let sum = 0;
+    for (let i = 0; i < right.length; i++) {
+      sum += right[i]! * right[i]!;
+    }
+    const rms = Math.sqrt(sum / right.length);
+    if (rms < 0.001) right = null;
   }
 
-  const left = audioBuffer.getChannelData(0);
-  const right = audioBuffer.getChannelData(1);
-  const mono = new Float32Array(left.length);
-  for (let i = 0; i < left.length; i++) {
-    mono[i] = (left[i]! + right[i]!) / 2;
-  }
-  return mono;
+  return { left, right };
 }
 
 // ── Transcription ──
@@ -126,36 +130,68 @@ async function transcribeGroq(audioBlob: Blob, model: string, apiKey: string): P
 import TranscribeWorker from "./transcribeWorker?worker";
 let localWorker: Worker | null = null;
 async function transcribeLocal(audioBlob: Blob, model: string): Promise<Transcription> {
-  const float32Array = await decodeAudio16k(audioBlob);
+  const { left, right } = await decodeAudio16kStereo(audioBlob);
 
   if (!localWorker) {
     localWorker = new TranscribeWorker();
   }
 
-  return new Promise((resolve, reject) => {
-    const handler = (e: MessageEvent) => {
-      const msg = e.data;
-      if (msg.type === "done") {
-        localWorker!.removeEventListener("message", handler);
-        const { result } = msg;
+  const runLocally = (audio: Float32Array): Promise<{ fullText: string; segments: any[] }> => {
+    return new Promise((resolve, reject) => {
+      const handler = (e: MessageEvent) => {
+        const msg = e.data;
+        if (msg.type === "done") {
+          localWorker!.removeEventListener("message", handler);
+          const { result } = msg;
 
-        const fullText = result.text.trim();
-        const segments = (result.chunks || []).map((c: any) => ({
-          start: c.timestamp[0] ?? 0,
-          end: c.timestamp[1] ?? (c.timestamp[0] + 5),
-          text: c.text.trim(),
-        }));
+          const fullText = (result.text || "").trim();
+          const segments = (result.chunks || []).map((c: any) => ({
+            start: c.timestamp?.[0] ?? 0,
+            end: c.timestamp?.[1] ?? ((c.timestamp?.[0] ?? 0) + 5),
+            text: (c.text || "").trim(),
+          }));
 
-        resolve({ fullText, segments });
-      } else if (msg.type === "error") {
-        localWorker!.removeEventListener("message", handler);
-        reject(new Error(msg.error));
-      }
-    };
+          resolve({ fullText, segments });
+        } else if (msg.type === "error") {
+          localWorker!.removeEventListener("message", handler);
+          reject(new Error(msg.error));
+        }
+      };
 
-    localWorker!.addEventListener("message", handler);
-    localWorker!.postMessage({ type: "transcribe", audio: float32Array, model });
-  });
+      localWorker!.addEventListener("message", handler);
+      localWorker!.postMessage({ type: "transcribe", audio, model });
+    });
+  };
+
+  const isSilent = (arr: Float32Array) => {
+    let sum = 0;
+    for (let i = 0; i < arr.length; i += 10) {
+      sum += arr[i]! * arr[i]!;
+    }
+    return Math.sqrt(sum / (arr.length / 10)) < 0.002;
+  };
+
+  let finalSegments: any[] = [];
+
+  const leftSilent = isSilent(left);
+  if (!leftSilent) {
+    const leftResult = await runLocally(left);
+    let leftSegs = leftResult.segments.map((s) => ({ ...s, speaker: right ? "You" : undefined }));
+    finalSegments = [...finalSegments, ...leftSegs];
+  }
+
+  if (right && !isSilent(right)) {
+    const rightResult = await runLocally(right);
+    const rightSegs = rightResult.segments.map((s) => ({ ...s, speaker: "Speaker 2" }));
+    finalSegments = [...finalSegments, ...rightSegs];
+  }
+
+  finalSegments.sort((a, b) => a.start - b.start);
+
+  return {
+    fullText: finalSegments.map((s) => s.text).join(" "),
+    segments: finalSegments,
+  };
 }
 
 export async function transcribe(audioBlob: Blob): Promise<Transcription> {

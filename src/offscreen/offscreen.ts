@@ -38,13 +38,12 @@ async function handleOffscreenMessage(msg: {
 
       audioContext = new AudioContext();
       const destination = audioContext.createMediaStreamDestination();
+      destination.channelCount = 2;
 
       const tabSource = audioContext.createMediaStreamSource(tabStream);
-      tabSource.connect(destination);
-      // Let user still hear the call
-      tabSource.connect(audioContext.destination);
 
       let micCaptured = false;
+
       if (captureMic) {
         try {
           micStream = await navigator.mediaDevices.getUserMedia({
@@ -55,11 +54,30 @@ async function handleOffscreenMessage(msg: {
             }
           });
           const micSource = audioContext.createMediaStreamSource(micStream);
-          micSource.connect(destination);
+
+          // Pan Mic hard left (-1) -> "You"
+          const micPanner = audioContext.createStereoPanner();
+          micPanner.pan.value = -1;
+          micSource.connect(micPanner);
+          micPanner.connect(destination);
+
+          // Pan Tab hard right (1) -> "Speaker 2"
+          const tabPanner = audioContext.createStereoPanner();
+          tabPanner.pan.value = 1;
+          tabSource.connect(tabPanner);
+          tabPanner.connect(destination);
+
           micCaptured = true;
+          // Let user still hear the call
+          tabSource.connect(audioContext.destination);
         } catch (err) {
           console.warn("Microphone capture failed:", err);
+          tabSource.connect(destination);
+          tabSource.connect(audioContext.destination);
         }
+      } else {
+        tabSource.connect(destination);
+        tabSource.connect(audioContext.destination);
       }
 
       mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
