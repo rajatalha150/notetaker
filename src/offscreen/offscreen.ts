@@ -47,7 +47,13 @@ async function handleOffscreenMessage(msg: {
       let micCaptured = false;
       if (captureMic) {
         try {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          micStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            }
+          });
           const micSource = audioContext.createMediaStreamSource(micStream);
           micSource.connect(destination);
           micCaptured = true;

@@ -17,6 +17,25 @@ function formatDuration(ms: number): string {
   return `${h}h ${m}m`;
 }
 
+async function decodeAudio16k(blob: Blob): Promise<Float32Array> {
+  const arrayBuffer = await blob.arrayBuffer();
+  const audioContext = new window.AudioContext({ sampleRate: 16000 });
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+  const numChannels = audioBuffer.numberOfChannels;
+  if (numChannels === 1) {
+    return audioBuffer.getChannelData(0);
+  }
+
+  const left = audioBuffer.getChannelData(0);
+  const right = audioBuffer.getChannelData(1);
+  const mono = new Float32Array(left.length);
+  for (let i = 0; i < left.length; i++) {
+    mono[i] = (left[i]! + right[i]!) / 2;
+  }
+  return mono;
+}
+
 // ── Transcription ──
 
 async function transcribeOpenAI(audioBlob: Blob, model: string, apiKey: string): Promise<Transcription> {
@@ -52,12 +71,12 @@ async function transcribeOpenAI(audioBlob: Blob, model: string, apiKey: string):
       language: data.language,
       segments: data.logprobs
         ? data.logprobs
-            .map((lp: { token: string; offset: number }, i: number, arr: { offset: number }[]) => ({
-              start: lp.offset ?? 0,
-              end: arr[i + 1]?.offset ?? lp.offset ?? 0,
-              text: lp.token?.trim() ?? "",
-            }))
-            .filter((s: { text: string }) => s.text.length > 0)
+          .map((lp: { token: string; offset: number }, i: number, arr: { offset: number }[]) => ({
+            start: lp.offset ?? 0,
+            end: arr[i + 1]?.offset ?? lp.offset ?? 0,
+            text: lp.token?.trim() ?? "",
+          }))
+          .filter((s: { text: string }) => s.text.length > 0)
         : [{ start: 0, end: 0, text: data.text }],
     };
   }
@@ -103,19 +122,57 @@ async function transcribeGroq(audioBlob: Blob, model: string, apiKey: string): P
   };
 }
 
+// @ts-expect-error Vite worker import
+import TranscribeWorker from "./transcribeWorker?worker";
+let localWorker: Worker | null = null;
+async function transcribeLocal(audioBlob: Blob, model: string): Promise<Transcription> {
+  const float32Array = await decodeAudio16k(audioBlob);
+
+  if (!localWorker) {
+    localWorker = new TranscribeWorker();
+  }
+
+  return new Promise((resolve, reject) => {
+    const handler = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg.type === "done") {
+        localWorker!.removeEventListener("message", handler);
+        const { result } = msg;
+
+        const fullText = result.text.trim();
+        const segments = (result.chunks || []).map((c: any) => ({
+          start: c.timestamp[0] ?? 0,
+          end: c.timestamp[1] ?? (c.timestamp[0] + 5),
+          text: c.text.trim(),
+        }));
+
+        resolve({ fullText, segments });
+      } else if (msg.type === "error") {
+        localWorker!.removeEventListener("message", handler);
+        reject(new Error(msg.error));
+      }
+    };
+
+    localWorker!.addEventListener("message", handler);
+    localWorker!.postMessage({ type: "transcribe", audio: float32Array, model });
+  });
+}
+
 export async function transcribe(audioBlob: Blob): Promise<Transcription> {
   const settings = await getSettings();
   const provider = settings.transcriptionProvider;
   const model = settings.transcriptionModel;
   const apiKey = settings.providers[provider];
 
-  if (!apiKey) throw new Error(`${provider} API key not set`);
+  if (provider !== "local" && !apiKey) throw new Error(`${provider} API key not set`);
 
   switch (provider) {
+    case "local":
+      return transcribeLocal(audioBlob, model);
     case "openai":
-      return transcribeOpenAI(audioBlob, model, apiKey);
+      return transcribeOpenAI(audioBlob, model, apiKey!);
     case "groq":
-      return transcribeGroq(audioBlob, model, apiKey);
+      return transcribeGroq(audioBlob, model, apiKey!);
     default:
       throw new Error(`${provider} does not support transcription`);
   }
@@ -225,6 +282,8 @@ async function chatCompletion(prompt: string, maxTokens = 2048): Promise<string>
       return chatGemini(prompt, model, apiKey, maxTokens);
     case "groq":
       return chatGroq(prompt, model, apiKey, maxTokens);
+    default:
+      throw new Error(`${provider} does not support summarization`);
   }
 }
 

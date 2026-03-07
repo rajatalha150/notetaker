@@ -9,6 +9,15 @@ const PROVIDER_LABELS: Record<Provider, string> = {
   anthropic: "Anthropic",
   gemini: "Google Gemini",
   groq: "Groq",
+  local: "Local (On-Device)",
+};
+
+const PROVIDER_LINKS: Record<Provider, string> = {
+  openai: "https://platform.openai.com/api-keys",
+  anthropic: "https://console.anthropic.com/settings/keys",
+  gemini: "https://aistudio.google.com/app/apikey",
+  groq: "https://console.groq.com/keys",
+  local: "",
 };
 
 const PROVIDER_PLACEHOLDERS: Record<Provider, string> = {
@@ -16,6 +25,7 @@ const PROVIDER_PLACEHOLDERS: Record<Provider, string> = {
   anthropic: "sk-ant-...",
   gemini: "AI...",
   groq: "gsk_...",
+  local: "",
 };
 
 const ALL_PROVIDERS: Provider[] = ["openai", "anthropic", "gemini", "groq"];
@@ -43,7 +53,7 @@ export function SettingsPage() {
 
   const configuredProviders = ALL_PROVIDERS.filter((p) => settings.providers[p]);
 
-  const transcriptionProviders = getProvidersWithCapability("transcription").filter((p) => configuredProviders.includes(p));
+  const transcriptionProviders = getProvidersWithCapability("transcription").filter((p) => configuredProviders.includes(p) || p === "local");
   const summarizationProviders = getProvidersWithCapability("chat").filter((p) => configuredProviders.includes(p));
 
   const transcriptionModels = getTranscriptionModels(settings.transcriptionProvider);
@@ -62,7 +72,19 @@ export function SettingsPage() {
         <div className="space-y-3 bg-gray-900/50 rounded-lg p-4 border border-gray-800/50">
           {ALL_PROVIDERS.map((provider) => (
             <div key={provider}>
-              <label className="block text-sm text-gray-300 mb-1.5">{PROVIDER_LABELS[provider]}</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-gray-300">{PROVIDER_LABELS[provider]}</label>
+                {PROVIDER_LINKS[provider] && (
+                  <a
+                    href={PROVIDER_LINKS[provider]}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  >
+                    Get API Key &rarr;
+                  </a>
+                )}
+              </div>
               <input
                 type="password"
                 value={settings.providers[provider] ?? ""}
@@ -82,7 +104,7 @@ export function SettingsPage() {
           <div>
             <label className="block text-sm text-gray-300 mb-1.5">Provider</label>
             {transcriptionProviders.length === 0 ? (
-              <p className="text-xs text-yellow-500">Add an OpenAI or Groq API key to enable transcription</p>
+              <p className="text-xs text-yellow-500">Add an API key to enable cloud transcription (Local transcription is available)</p>
             ) : (
               <select
                 value={settings.transcriptionProvider}
@@ -115,6 +137,12 @@ export function SettingsPage() {
                   <option key={m.id} value={m.id}>{m.label}</option>
                 ))}
               </select>
+              {settings.transcriptionProvider === "local" && (
+                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                  <strong>Local mode:</strong> The AI model runs <i>entirely inside your browser</i>.
+                  It's 100% private and free. The first transcription will download the model (~40-80MB) automatically.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -190,11 +218,10 @@ export function SettingsPage() {
 
       <button
         onClick={handleSave}
-        className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all ${
-          saved
-            ? "bg-green-600/20 text-green-400 border border-green-800/50"
-            : "bg-blue-600 hover:bg-blue-500 text-white"
-        }`}
+        className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all ${saved
+          ? "bg-green-600/20 text-green-400 border border-green-800/50"
+          : "bg-blue-600 hover:bg-blue-500 text-white"
+          }`}
       >
         {saved ? "Saved!" : "Save Settings"}
       </button>

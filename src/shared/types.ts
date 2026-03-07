@@ -35,7 +35,7 @@ export interface TranscriptionSegment {
   speaker?: string;
 }
 
-export type Provider = "openai" | "anthropic" | "gemini" | "groq";
+export type Provider = "openai" | "anthropic" | "gemini" | "groq" | "local";
 
 export interface Settings {
   providers: {
@@ -43,6 +43,7 @@ export interface Settings {
     anthropic?: string;
     gemini?: string;
     groq?: string;
+    local?: string;
   };
   transcriptionProvider: Provider;
   transcriptionModel: string;
@@ -54,8 +55,8 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   providers: {},
-  transcriptionProvider: "openai",
-  transcriptionModel: "whisper-1",
+  transcriptionProvider: "local",
+  transcriptionModel: "Xenova/whisper-tiny.en",
   summarizationProvider: "anthropic",
   summarizationModel: "claude-sonnet-4-6-20250220",
   audioFormat: "webm",
