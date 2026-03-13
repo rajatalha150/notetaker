@@ -7,6 +7,9 @@ type PauseRecording = { type: "PAUSE_RECORDING" };
 type ResumeRecording = { type: "RESUME_RECORDING" };
 type GetStatus = { type: "GET_STATUS" };
 type AddNote = { type: "ADD_NOTE"; text: string };
+type PlatformDetected = { type: "PLATFORM_DETECTED"; platform: string };
+type UserNameDetected = { type: "USER_NAME_DETECTED"; name: string };
+type SpeakerActive = { type: "SPEAKER_ACTIVE"; name: string };
 
 export type BackgroundMessage =
   | StartRecording
@@ -14,7 +17,10 @@ export type BackgroundMessage =
   | PauseRecording
   | ResumeRecording
   | GetStatus
-  | AddNote;
+  | AddNote
+  | PlatformDetected
+  | UserNameDetected
+  | SpeakerActive;
 
 // Responses
 export type StatusResponse = {
@@ -29,14 +35,12 @@ type RecordingStarted = { type: "RECORDING_STARTED"; recordingId: string };
 type RecordingStopped = { type: "RECORDING_STOPPED"; recordingId: string };
 type RecordingPaused = { type: "RECORDING_PAUSED" };
 type RecordingResumed = { type: "RECORDING_RESUMED" };
-type PlatformDetected = { type: "PLATFORM_DETECTED"; platform: string; tabId: number };
 
 export type BroadcastEvent =
   | RecordingStarted
   | RecordingStopped
   | RecordingPaused
-  | RecordingResumed
-  | PlatformDetected;
+  | RecordingResumed;
 
 export function sendToBackground<T = unknown>(msg: BackgroundMessage): Promise<T> {
   return chrome.runtime.sendMessage(msg);

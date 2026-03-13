@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Notetaker",
-  "description": "Privacy-first call recorder with AI transcription and summarization",
+  "description": "Silent AI meeting recorder with real-time speaker identification and on-device privacy.",
   "version": "0.1.0",
   "permissions": [
     "tabCapture",

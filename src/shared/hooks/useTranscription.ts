@@ -20,7 +20,13 @@ export function useTranscription(recordingId: string | undefined) {
     mutationFn: async (file: File) => {
       const result = await transcribe(file);
       try {
-        const diarized = await diarizeSpeakers(result.segments);
+        if (!recordingId) throw new Error("No recording ID");
+        const meta = await getRecording(recordingId);
+        const diarized = await diarizeSpeakers(
+          result.segments, 
+          meta?.userName, 
+          meta?.speakerEvents
+        );
         return { ...result, segments: diarized };
       } catch {
         return result;

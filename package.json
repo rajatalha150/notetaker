@@ -2,6 +2,9 @@
   "name": "notetaker",
   "private": true,
   "version": "0.1.0",
+  "description": "Privacy-first meeting recorder, transcriber, and summarizer by Peak Services Inc.",
+  "author": "Peak Services Inc.",
+  "homepage": "https://peakservices-inc.com",
   "type": "module",
   "scripts": {
     "dev": "vite",

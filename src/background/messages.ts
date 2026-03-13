@@ -26,9 +26,56 @@ export async function handleMessage(
         duration: 0,
         status: "recording",
         notes: [],
+        speakerEvents: [],
       });
       broadcast({ type: "RECORDING_STARTED", recordingId });
       return { recordingId };
+    }
+ 
+    case "PLATFORM_DETECTED": {
+      const s = getRecorderState();
+      if (s) {
+        const meta = await getRecording(s.recordingId);
+        if (meta) {
+          meta.platform = msg.platform;
+          await saveRecording(meta);
+        }
+      }
+      return { ok: true };
+    }
+
+    case "USER_NAME_DETECTED": {
+      const s = getRecorderState();
+      if (s) {
+        const meta = await getRecording(s.recordingId);
+        if (meta) {
+          meta.userName = msg.name;
+          await saveRecording(meta);
+        }
+      }
+      return { ok: true };
+    }
+
+    case "SPEAKER_ACTIVE": {
+      const s = getRecorderState();
+      const elapsed = getElapsedMs();
+      if (s && s.status === "recording") {
+        const meta = await getRecording(s.recordingId);
+        if (meta) {
+          if (!meta.speakerEvents) meta.speakerEvents = [];
+          
+          // Only add if different from last event to save space, or if significant time passed
+          const lastEvent = meta.speakerEvents[meta.speakerEvents.length - 1];
+          if (!lastEvent || lastEvent.name !== msg.name || (elapsed - lastEvent.timestamp > 10000)) {
+            meta.speakerEvents.push({
+              name: msg.name,
+              timestamp: elapsed,
+            });
+            await saveRecording(meta);
+          }
+        }
+      }
+      return { ok: true };
     }
 
     case "STOP_RECORDING": {

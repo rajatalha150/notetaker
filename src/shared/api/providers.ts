@@ -459,15 +459,29 @@ async function chatCompletion(prompt: string, maxTokens = 2048): Promise<string>
 
 // ── High-level functions ──
 
-export async function diarizeSpeakers(segments: TranscriptionSegment[]): Promise<TranscriptionSegment[]> {
+export async function diarizeSpeakers(
+  segments: TranscriptionSegment[],
+  userName?: string,
+  speakerEvents?: any[]
+): Promise<TranscriptionSegment[]> {
   if (segments.length === 0) return segments;
+
+  const namesList = [
+    ...(userName ? [userName] : []),
+    ...(speakerEvents ? Array.from(new Set(speakerEvents.map(e => e.name))) : [])
+  ].join(", ");
+
+  const contextPrompt = namesList 
+    ? `The following people were detected in the call: ${namesList}. Use these actual names for labels instead of generic ones whenever possible.`
+    : `Assign labels like "Speaker A", "Speaker B", etc.`;
 
   const transcript = segments
     .map((s, i) => `[${i}] [${formatTimestamp(s.start)}] ${s.text}`)
     .join("\n");
 
   const text = await chatCompletion(
-    `Analyze this transcript and identify distinct speakers based on conversational cues (questions vs answers, topic shifts, style differences). Assign labels like "Speaker A", "Speaker B", etc.
+    `Analyze this transcript and identify distinct speakers based on conversational cues (questions vs answers, topic shifts, style differences). Use names from the detected list if they match.
+${contextPrompt}
 
 Return ONLY a JSON array of speaker labels, one per segment index. Example: ["Speaker A", "Speaker B", "Speaker A"]
 
@@ -490,10 +504,20 @@ ${transcript}`,
       return String(item) || "Unknown";
     });
 
-    return segments.map((seg, i) => ({
-      ...seg,
-      speaker: labels[i] ?? seg.speaker,
-    }));
+    return segments.map((seg, i) => {
+      let speaker = labels[i] ?? seg.speaker;
+      
+      // Post-process "You" mapping if AI returned "You" but we have useName
+      if (speaker === "You" && userName) speaker = userName;
+
+      // If AI didn't find a name but we have a log event at this exact time, use it
+      if ((!speaker || speaker.startsWith("Speaker")) && speakerEvents) {
+        const event = speakerEvents.find(e => Math.abs(e.timestamp - seg.start) < 3000);
+        if (event) speaker = event.name;
+      }
+
+      return { ...seg, speaker };
+    });
   } catch {
     return segments;
   }

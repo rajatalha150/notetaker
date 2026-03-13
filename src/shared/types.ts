@@ -13,6 +13,13 @@ export interface RecordingMeta {
   summary?: string;
   downloadId?: number;
   filename?: string;
+  userName?: string; // The name of "You"
+  speakerEvents?: SpeakerEvent[]; // Log of who spoke when
+}
+
+export interface SpeakerEvent {
+  name: string;
+  timestamp: number; // ms offset from recording start
 }
 
 export interface Note {
