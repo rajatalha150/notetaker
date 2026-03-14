@@ -226,33 +226,80 @@ export function useDesktopRecorder() {
         audioContextRef.current = audioContext
         finalStream = destination.stream
 
-        let lastDominantSpeaker: string | null = null
+        let smoothedMicLevel = 0
+        let smoothedSystemLevel = 0
+        let confirmedSpeaker: string | null = null
+        let candidateSpeaker: string | null = null
+        let candidateCount = 0
+        let lastConfirmedAt = 0
+
         speakerMonitorRef.current = window.setInterval(() => {
           if (mediaRecorderRef.current?.state !== 'recording') return
 
           const micLevel = getAnalyserLevel(micAnalyser)
           const systemLevel = getAnalyserLevel(systemAnalyser)
+          smoothedMicLevel = smoothedMicLevel === 0 ? micLevel : (smoothedMicLevel * 0.65) + (micLevel * 0.35)
+          smoothedSystemLevel = smoothedSystemLevel === 0 ? systemLevel : (smoothedSystemLevel * 0.65) + (systemLevel * 0.35)
+
           const silenceFloor = 0.02
           const dominanceGap = 0.01
+          const dominanceRatio = 1.35
+          const confirmationSamples = 2
+          const switchCooldownMs = 4000
 
-          if (micLevel < silenceFloor && systemLevel < silenceFloor) {
+          if (smoothedMicLevel < silenceFloor && smoothedSystemLevel < silenceFloor) {
+            candidateSpeaker = null
+            candidateCount = 0
             return
           }
 
           let dominantSpeaker: string | null = null
-          if (micLevel > systemLevel + dominanceGap) {
+          if (
+            smoothedMicLevel > smoothedSystemLevel + dominanceGap &&
+            smoothedMicLevel > smoothedSystemLevel * dominanceRatio
+          ) {
             dominantSpeaker = 'You'
-          } else if (systemLevel > micLevel + dominanceGap) {
+          } else if (
+            smoothedSystemLevel > smoothedMicLevel + dominanceGap &&
+            smoothedSystemLevel > smoothedMicLevel * dominanceRatio
+          ) {
             dominantSpeaker = 'Speaker 2'
           }
 
-          if (!dominantSpeaker || dominantSpeaker === lastDominantSpeaker) {
+          if (!dominantSpeaker) {
+            candidateSpeaker = null
+            candidateCount = 0
             return
           }
 
-          lastDominantSpeaker = dominantSpeaker
+          if (dominantSpeaker === confirmedSpeaker) {
+            candidateSpeaker = null
+            candidateCount = 0
+            return
+          }
+
+          if (dominantSpeaker !== candidateSpeaker) {
+            candidateSpeaker = dominantSpeaker
+            candidateCount = 1
+            return
+          }
+
+          candidateCount += 1
+          if (candidateCount < confirmationSamples) {
+            return
+          }
+
+          const now = getElapsedMs()
+          if (lastConfirmedAt > 0 && now - lastConfirmedAt < switchCooldownMs) {
+            return
+          }
+
+          confirmedSpeaker = dominantSpeaker
+          candidateSpeaker = null
+          candidateCount = 0
+          lastConfirmedAt = now
           void appendSpeakerEvent(dominantSpeaker)
-        }, 1500)
+        }, 750)
       }
 
       mixedStreamRef.current = finalStream
