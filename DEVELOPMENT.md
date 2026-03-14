@@ -60,7 +60,7 @@ This compiles the TypeScript main process, bundles the renderer with Vite, and t
 - Desktop recordings are created in the renderer, then written to disk by Electron main via preload IPC.
 - The desktop library can reopen saved files and pass them back into the shared transcription pipeline directly.
 - The desktop app now reuses the shared settings screen, summary flow, and metadata schema.
-- Desktop now attempts deterministic native participant detection from live window metadata first and source titles second, and records those names separately from manual fallback hints.
+- Desktop now attempts deterministic native participant detection from live process/window metadata first and source titles second, and records those names separately from manual fallback hints.
 - Remaining parity work is focused on deeper native-app integrations beyond current window metadata/title extraction and any future true cross-app library sync.
 
 ## License

@@ -339,6 +339,12 @@ export function App() {
                        </span>
                      </div>
                      <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
+                       <span className="text-gray-500">Process Name</span>
+                       <span className="max-w-[65%] text-right text-gray-300 break-words">
+                         {selectedRecording?.sourceProcessName || 'Unavailable'}
+                       </span>
+                     </div>
+                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
                        <span className="text-gray-500">Detected Platform</span>
                        <span className="max-w-[65%] text-right text-gray-300">
                          {selectedRecording?.platform || 'Unknown'}

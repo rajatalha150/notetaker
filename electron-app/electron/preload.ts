@@ -13,6 +13,7 @@ const desktop = {
       sourceName: string
       windowTitle?: string
       windowClass?: string
+      processName?: string
     } | null>
   },
   saveRecording(filename: string, data: ArrayBuffer) {

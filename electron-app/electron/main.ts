@@ -18,6 +18,12 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win: BrowserWindow | null
 const execFileAsync = promisify(execFile)
 
+interface NativeWindowMetadata {
+  windowTitle?: string
+  windowClass?: string
+  processName?: string
+}
+
 function serializeSource(source: Electron.DesktopCapturerSource) {
   return {
     id: source.id,
@@ -38,6 +44,18 @@ function parseX11WindowId(sourceId: string) {
   return `0x${value.toString(16)}`
 }
 
+function parseNativeWindowHandle(sourceId: string) {
+  const match = sourceId.match(/^window:(\d+):/)
+  if (!match) return null
+
+  const value = Number.parseInt(match[1], 10)
+  if (!Number.isFinite(value) || value <= 0) {
+    return null
+  }
+
+  return value
+}
+
 function parseXPropLine(output: string, key: string) {
   return output
     .split('\n')
@@ -53,7 +71,7 @@ function parseQuotedValues(line?: string) {
     .filter((value): value is string => !!value)
 }
 
-async function getLinuxWindowMetadata(sourceId: string) {
+async function getLinuxWindowMetadata(sourceId: string): Promise<NativeWindowMetadata | null> {
   if (process.platform !== 'linux') {
     return null
   }
@@ -81,6 +99,44 @@ async function getLinuxWindowMetadata(sourceId: string) {
   } catch {
     return null
   }
+}
+
+async function getWindowsWindowMetadata(sourceId: string): Promise<NativeWindowMetadata | null> {
+  if (process.platform !== 'win32') {
+    return null
+  }
+
+  const windowHandle = parseNativeWindowHandle(sourceId)
+  if (!windowHandle) {
+    return null
+  }
+
+  const command = [
+    `$handle = ${windowHandle}`,
+    '$process = Get-Process | Where-Object { $_.MainWindowHandle -eq $handle } | Select-Object -First 1 ProcessName, MainWindowTitle',
+    'if ($process) { $process | ConvertTo-Json -Compress }',
+  ].join('; ')
+
+  try {
+    const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', command])
+    const parsed = JSON.parse(stdout.trim()) as { ProcessName?: string; MainWindowTitle?: string }
+
+    return {
+      processName: parsed.ProcessName?.trim() || undefined,
+      windowTitle: parsed.MainWindowTitle?.trim() || undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
+async function getNativeWindowMetadata(sourceId: string): Promise<NativeWindowMetadata | null> {
+  const windowsMetadata = await getWindowsWindowMetadata(sourceId)
+  if (windowsMetadata) {
+    return windowsMetadata
+  }
+
+  return getLinuxWindowMetadata(sourceId)
 }
 
 function getRecordingsDir() {
@@ -177,12 +233,13 @@ ipcMain.handle('get-source-metadata-by-id', async (_event, payload: { id: string
     return null
   }
 
-  const metadata = await getLinuxWindowMetadata(source.id)
+  const metadata = await getNativeWindowMetadata(source.id)
   return {
     sourceId: source.id,
     sourceName: source.name,
     windowTitle: metadata?.windowTitle,
     windowClass: metadata?.windowClass,
+    processName: metadata?.processName,
   }
 })
 

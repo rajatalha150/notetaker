@@ -20,6 +20,7 @@ export interface RecordingMeta {
   sourceName?: string;
   sourceWindowTitle?: string;
   sourceWindowClass?: string;
+  sourceProcessName?: string;
   mimeType?: string;
   userName?: string; // The name of "You"
   participantNames?: string[];

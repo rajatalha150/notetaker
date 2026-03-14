@@ -21,6 +21,7 @@ function buildSourceContext(sourceName?: string, metadata?: DesktopSourceMetadat
     sourceName: metadata?.sourceName || sourceName || '',
     windowTitle: metadata?.windowTitle,
     windowClass: metadata?.windowClass,
+    processName: metadata?.processName,
   }
 }
 
@@ -221,6 +222,7 @@ export function useDesktopRecorder() {
       sourceName: sourceContext.sourceName || meta.sourceName,
       sourceWindowTitle: sourceContext.windowTitle,
       sourceWindowClass: sourceContext.windowClass,
+      sourceProcessName: sourceContext.processName,
       platform: detection.platform ?? meta.platform ?? buildPlatformLabel(sourceContext.sourceName || meta.sourceName),
       detectedParticipantNames,
       participantDetectionMethod: detection.detectionMethod,
@@ -234,6 +236,7 @@ export function useDesktopRecorder() {
       nextMeta.sourceName !== meta.sourceName ||
       nextMeta.sourceWindowTitle !== meta.sourceWindowTitle ||
       nextMeta.sourceWindowClass !== meta.sourceWindowClass ||
+      nextMeta.sourceProcessName !== meta.sourceProcessName ||
       nextMeta.platform !== meta.platform ||
       JSON.stringify(nextMeta.detectedParticipantNames ?? []) !== JSON.stringify(meta.detectedParticipantNames ?? []) ||
       JSON.stringify(nextMeta.speakerEvents ?? []) !== JSON.stringify(meta.speakerEvents ?? []) ||
@@ -459,6 +462,7 @@ export function useDesktopRecorder() {
               sourceName: meta.sourceName ?? resolvedSourceName ?? '',
               windowTitle: meta.sourceWindowTitle,
               windowClass: meta.sourceWindowClass,
+              processName: meta.sourceProcessName,
             })
             const detectedParticipantNames = detection.detectedParticipantNames
             const externalName = detectedParticipantNames.length === 1 ? detectedParticipantNames[0] : undefined
@@ -476,6 +480,7 @@ export function useDesktopRecorder() {
             meta.sourceName = meta.sourceName ?? resolvedSourceName
             meta.sourceWindowTitle = meta.sourceWindowTitle ?? initialSourceContext.windowTitle
             meta.sourceWindowClass = meta.sourceWindowClass ?? initialSourceContext.windowClass
+            meta.sourceProcessName = meta.sourceProcessName ?? initialSourceContext.processName
             meta.userName = captureMic ? 'You' : undefined
             meta.detectedParticipantNames = detectedParticipantNames
             meta.participantDetectionMethod = detection.detectionMethod
@@ -510,6 +515,7 @@ export function useDesktopRecorder() {
         sourceName: resolvedSourceName,
         sourceWindowTitle: initialSourceContext.windowTitle,
         sourceWindowClass: initialSourceContext.windowClass,
+        sourceProcessName: initialSourceContext.processName,
         mimeType: mimeTypeRef.current,
         userName: captureMic ? 'You' : undefined,
       }

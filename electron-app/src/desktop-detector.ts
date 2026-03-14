@@ -8,6 +8,7 @@ export interface DesktopMeetingContextInput {
   sourceName?: string
   windowTitle?: string
   windowClass?: string
+  processName?: string
 }
 
 interface PlatformRule {
@@ -149,6 +150,7 @@ const PLATFORM_RULES: PlatformRule[] = [
 
 function buildSearchHaystack(input: DesktopMeetingContextInput) {
   return [
+    normalizeWhitespace(input.processName ?? ''),
     normalizeWhitespace(input.windowClass ?? ''),
     normalizeWhitespace(input.windowTitle ?? ''),
     normalizeWhitespace(input.sourceName ?? ''),

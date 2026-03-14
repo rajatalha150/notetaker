@@ -9,6 +9,7 @@ export interface DesktopSourceMetadata {
   sourceName: string
   windowTitle?: string
   windowClass?: string
+  processName?: string
 }
 
 export interface DesktopRecordingSaveResult {
