@@ -462,12 +462,14 @@ async function chatCompletion(prompt: string, maxTokens = 2048): Promise<string>
 export async function diarizeSpeakers(
   segments: TranscriptionSegment[],
   userName?: string,
-  speakerEvents?: any[]
+  speakerEvents?: any[],
+  participantNames?: string[]
 ): Promise<TranscriptionSegment[]> {
   if (segments.length === 0) return segments;
 
   const namesList = [
     ...(userName ? [userName] : []),
+    ...(participantNames ?? []),
     ...(speakerEvents ? Array.from(new Set(speakerEvents.map(e => e.name))) : [])
   ].join(", ");
 

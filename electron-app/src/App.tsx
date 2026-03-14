@@ -23,7 +23,7 @@ import { TranscriptionView } from '../../src/sidepanel/components/TranscriptionV
 import { SummaryView } from '../../src/sidepanel/components/SummaryView'
 import { SettingsPage } from '../../src/sidepanel/routes/settings'
 import { getSettings } from '@shared/storage/settings'
-import { getAllRecordings, deleteRecording, getRecording } from '@shared/storage/metadata'
+import { getAllRecordings, deleteRecording, getRecording, saveRecording } from '@shared/storage/metadata'
 import { useTranscription } from '@shared/hooks/useTranscription'
 import { useSummary } from '@shared/hooks/useSummary'
 import type { RecordingMeta } from '@shared/types'
@@ -37,6 +37,7 @@ export function App() {
   const [captureMic, setCaptureMic] = useState(true)
   const [recordings, setRecordings] = useState<RecordingMeta[]>([])
   const [selectedRecording, setSelectedRecording] = useState<RecordingMeta | null>(null)
+  const [participantHint, setParticipantHint] = useState('')
   
   const [errorInfo, setErrorInfo] = useState<string | null>(null);
 
@@ -96,6 +97,7 @@ export function App() {
        loadSelectedRecording(selectedRecordingId)
     } else {
       setSelectedRecording(null)
+      setParticipantHint('')
     }
   }, [selectedRecordingId, transcription, summary])
 
@@ -113,7 +115,10 @@ export function App() {
 
   const loadSelectedRecording = async (id: string) => {
     const rec = await getRecording(id)
-    if (rec) setSelectedRecording(rec)
+    if (rec) {
+      setSelectedRecording(rec)
+      setParticipantHint(rec.participantNames?.[0] ?? '')
+    }
   }
 
   const loadSettings = async () => {
@@ -158,6 +163,23 @@ export function App() {
   const handleTranscribe = async () => {
     try {
       await transcribeSavedRecording()
+    } catch (error) {
+      setErrorInfo(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const handleSaveParticipantHint = async () => {
+    if (!selectedRecording) return
+
+    try {
+      const trimmed = participantHint.trim()
+      const updated: RecordingMeta = {
+        ...selectedRecording,
+        participantNames: trimmed ? [trimmed] : [],
+      }
+      await saveRecording(updated)
+      setSelectedRecording(updated)
+      loadRecordings()
     } catch (error) {
       setErrorInfo(error instanceof Error ? error.message : String(error))
     }
@@ -219,6 +241,29 @@ export function App() {
                    {selectedRecording?.sourceName || 'Desktop Audio'}
                    {selectedRecording?.filename ? ` · ${selectedRecording.filename}` : ''}
                  </p>
+
+                 <div className="mb-6 rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
+                     Other Speaker Hint
+                   </label>
+                   <p className="text-xs text-gray-500 mb-3">
+                     Set the main other participant name before retranscribing to help native-app speaker labeling.
+                   </p>
+                   <div className="flex gap-2">
+                     <input
+                       value={participantHint}
+                       onChange={(e) => setParticipantHint(e.target.value)}
+                       placeholder="e.g. John Doe"
+                       className="flex-1 rounded-xl border border-gray-800 bg-black/60 px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-gray-700"
+                     />
+                     <button
+                       onClick={handleSaveParticipantHint}
+                       className="rounded-xl bg-gray-800 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white hover:bg-gray-700 transition-colors"
+                     >
+                       Save
+                     </button>
+                   </div>
+                 </div>
                  
                  <div className="flex gap-3">
                    <button 

@@ -20,6 +20,7 @@ export interface RecordingMeta {
   sourceName?: string;
   mimeType?: string;
   userName?: string; // The name of "You"
+  participantNames?: string[];
   speakerEvents?: SpeakerEvent[]; // Log of who spoke when
 }
 

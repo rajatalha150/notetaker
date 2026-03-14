@@ -26,7 +26,8 @@ export function useTranscription(recordingId: string | undefined) {
         const diarized = await diarizeSpeakers(
           result.segments, 
           meta?.userName, 
-          meta?.speakerEvents
+          meta?.speakerEvents,
+          meta?.participantNames
         );
         return { ...result, segments: diarized };
       } catch {
