@@ -16,6 +16,12 @@ const desktop = {
       processName?: string
     } | null>
   },
+  getParticipantsBySourceId(id: string) {
+    return ipcRenderer.invoke('get-participants-by-source-id', { id }) as Promise<{
+      names: string[]
+      method: 'native-ui' | 'none'
+    }>
+  },
   saveRecording(filename: string, data: ArrayBuffer) {
     return ipcRenderer.invoke('desktop-save-recording', { filename, data }) as Promise<{
       filePath: string

@@ -57,7 +57,7 @@ Ideal for native apps and system-wide audio capture.
 
 The project utilizes a **Shared AI Core** and a **Chrome-Shim** layer. This allows the Desktop application to leverage the same encryption, storage, and AI logic as the extension, ensuring your meeting history is consistent across your entire device.
 
-Today the extension and desktop app share the same data model, AI pipeline, and settings UI, while persisting data in their own runtime-appropriate local stores. Desktop recordings are stored as real files managed by Electron, can be transcribed directly from the desktop library without manual file re-selection, and now attempt deterministic participant-name discovery from native process/window metadata first, then source titles, before falling back to manual hints.
+Today the extension and desktop app share the same data model, AI pipeline, and settings UI, while persisting data in their own runtime-appropriate local stores. Desktop recordings are stored as real files managed by Electron, can be transcribed directly from the desktop library without manual file re-selection, and now attempt deterministic participant-name discovery from native process/window metadata and UI automation first, then source titles, before falling back to manual hints.
 
 ---
 

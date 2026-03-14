@@ -12,6 +12,11 @@ export interface DesktopSourceMetadata {
   processName?: string
 }
 
+export interface DesktopParticipantProbeResult {
+  names: string[]
+  method: 'native-ui' | 'none'
+}
+
 export interface DesktopRecordingSaveResult {
   filePath: string
   filename: string
@@ -25,6 +30,7 @@ declare global {
         listSources(): Promise<DesktopSource[]>
         getSourceById(id: string): Promise<DesktopSource | null>
         getSourceMetadataById(id: string): Promise<DesktopSourceMetadata | null>
+        getParticipantsBySourceId(id: string): Promise<DesktopParticipantProbeResult>
         saveRecording(filename: string, data: ArrayBuffer): Promise<DesktopRecordingSaveResult>
         readRecording(filePath: string): Promise<ArrayBuffer>
         deleteRecording(filePath: string): Promise<{ ok: true }>

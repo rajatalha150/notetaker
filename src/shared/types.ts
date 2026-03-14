@@ -25,7 +25,7 @@ export interface RecordingMeta {
   userName?: string; // The name of "You"
   participantNames?: string[];
   detectedParticipantNames?: string[];
-  participantDetectionMethod?: "source-title" | "window-metadata";
+  participantDetectionMethod?: "source-title" | "window-metadata" | "native-ui";
   speakerEvents?: SpeakerEvent[]; // Log of who spoke when
 }
 

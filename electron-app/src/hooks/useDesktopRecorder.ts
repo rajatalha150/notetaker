@@ -61,6 +61,7 @@ export function useDesktopRecorder() {
   const sourceRef = useRef<{ id: string; name?: string } | null>(null)
   const externalSpeakerLabelRef = useRef('Speaker 2')
   const mimeTypeRef = useRef('audio/webm')
+  const participantProbeCooldownRef = useRef<number>(0)
 
   const invalidateRecordingQueries = useCallback((id?: string | null) => {
     queryClient.invalidateQueries({ queryKey: ['recordings'] })
@@ -248,6 +249,51 @@ export function useDesktopRecorder() {
     invalidateRecordingQueries(id)
   }, [invalidateRecordingQueries, normalizeDesktopSpeakerNames])
 
+  const probeParticipants = useCallback(async (sourceId: string, sourceContext: ReturnType<typeof buildSourceContext>) => {
+    // simple cooldown to avoid hammering native UI automation
+    const now = Date.now()
+    if (participantProbeCooldownRef.current && now - participantProbeCooldownRef.current < 8000) {
+      return
+    }
+
+    participantProbeCooldownRef.current = now
+
+    const result = await window.electron.desktop.getParticipantsBySourceId(sourceId)
+    const names = Array.isArray(result.names) ? result.names.map((name) => name.trim()).filter(Boolean) : []
+    if (!names.length) return
+
+    const id = recordingIdRef.current
+    if (!id) return
+
+    const meta = await getRecording(id)
+    if (!meta) return
+
+    const mergedNames = Array.from(new Set([...(meta.detectedParticipantNames ?? []), ...names]))
+    const externalName = mergedNames.length === 1 ? mergedNames[0] : undefined
+    externalSpeakerLabelRef.current = externalName || 'Speaker 2'
+
+    let nextMeta: RecordingMeta = {
+      ...meta,
+      detectedParticipantNames: mergedNames,
+      participantDetectionMethod: mergedNames.length ? 'native-ui' : meta.participantDetectionMethod,
+    }
+
+    if (externalName) {
+      nextMeta = normalizeDesktopSpeakerNames(nextMeta, externalName)
+    }
+
+    const changed =
+      JSON.stringify(nextMeta.detectedParticipantNames ?? []) !== JSON.stringify(meta.detectedParticipantNames ?? []) ||
+      JSON.stringify(nextMeta.speakerEvents ?? []) !== JSON.stringify(meta.speakerEvents ?? []) ||
+      JSON.stringify(nextMeta.transcription ?? null) !== JSON.stringify(meta.transcription ?? null) ||
+      nextMeta.participantDetectionMethod !== meta.participantDetectionMethod
+
+    if (!changed) return
+
+    await saveRecording(nextMeta)
+    invalidateRecordingQueries(id)
+  }, [invalidateRecordingQueries, normalizeDesktopSpeakerNames])
+
   const startRecording = useCallback(async (sourceId: string, captureMic: boolean, sourceName?: string) => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       throw new Error('A desktop recording is already in progress')
@@ -418,7 +464,9 @@ export function useDesktopRecorder() {
           name: liveSourceMetadata.sourceName,
         }
 
-        await updateDetectionMetadata(buildSourceContext(liveSourceMetadata.sourceName, liveSourceMetadata))
+        const liveContext = buildSourceContext(liveSourceMetadata.sourceName, liveSourceMetadata)
+        await updateDetectionMetadata(liveContext)
+        await probeParticipants(currentSource.id, liveContext)
       }, 4000)
 
       mimeTypeRef.current = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')

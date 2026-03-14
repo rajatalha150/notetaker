@@ -24,6 +24,11 @@ interface NativeWindowMetadata {
   processName?: string
 }
 
+interface ParticipantProbeResult {
+  names: string[]
+  method: 'native-ui' | 'none'
+}
+
 function serializeSource(source: Electron.DesktopCapturerSource) {
   return {
     id: source.id,
@@ -139,6 +144,58 @@ async function getNativeWindowMetadata(sourceId: string): Promise<NativeWindowMe
   return getLinuxWindowMetadata(sourceId)
 }
 
+async function getWindowsParticipants(sourceId: string): Promise<ParticipantProbeResult> {
+  if (process.platform !== 'win32') {
+    return { names: [], method: 'none' }
+  }
+
+  const windowHandle = parseNativeWindowHandle(sourceId)
+  if (!windowHandle) {
+    return { names: [], method: 'none' }
+  }
+
+  // UI Automation traversal to collect visible element names near the active window tree
+  const command = [
+    '[void][System.Reflection.Assembly]::LoadWithPartialName("UIAutomationClient")',
+    `$handle = ${windowHandle}`,
+    '$root = [System.Windows.Automation.AutomationElement]::FromHandle($handle)',
+    'if (-not $root) { return }',
+    '$treeWalker = New-Object System.Windows.Automation.TreeWalker ([System.Windows.Automation.Condition]::TrueCondition)',
+    'function Get-Names($node, $depth){',
+    '  if (-not $node -or $depth -gt 4) { return @() }',
+    '  $names = @()',
+    '  if ($node.Current.Name) { $names += $node.Current.Name }',
+    '  $child = $treeWalker.GetFirstChild($node)',
+    '  while($child){',
+    '    $names += Get-Names $child ($depth + 1)',
+    '    $child = $treeWalker.GetNextSibling($child)',
+    '  }',
+    '  return $names',
+    '}',
+    '$all = Get-Names $root 0 | Where-Object { $_ -and $_.Length -gt 1 } | Select-Object -First 20',
+    '$all | ConvertTo-Json -Compress',
+  ].join('; ')
+
+  try {
+    const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', command])
+    const parsed = JSON.parse(stdout.trim()) as string[]
+    const names = Array.isArray(parsed) ? parsed : []
+    return { names, method: names.length ? 'native-ui' : 'none' }
+  } catch {
+    return { names: [], method: 'none' }
+  }
+}
+
+async function getNativeParticipants(sourceId: string): Promise<ParticipantProbeResult> {
+  const winResult = await getWindowsParticipants(sourceId)
+  if (winResult.method !== 'none') {
+    return winResult
+  }
+
+  // Linux/macOS not implemented yet
+  return { names: [], method: 'none' }
+}
+
 function getRecordingsDir() {
   return path.join(app.getPath('userData'), 'recordings')
 }
@@ -241,6 +298,16 @@ ipcMain.handle('get-source-metadata-by-id', async (_event, payload: { id: string
     windowClass: metadata?.windowClass,
     processName: metadata?.processName,
   }
+})
+
+ipcMain.handle('get-participants-by-source-id', async (_event, payload: { id: string }) => {
+  const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] })
+  const source = sources.find((entry) => entry.id === payload.id)
+  if (!source) {
+    return { names: [], method: 'none' }
+  }
+
+  return getNativeParticipants(source.id)
 })
 
 ipcMain.handle('desktop-save-recording', async (_event, payload: { filename: string; data: ArrayBuffer }) => {

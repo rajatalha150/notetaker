@@ -351,15 +351,15 @@ export function App() {
                        </span>
                      </div>
                      <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
-                       <span className="text-gray-500">Detection Method</span>
-                       <span className="max-w-[65%] text-right text-gray-300 uppercase">
-                         {selectedRecording?.participantDetectionMethod || 'None'}
-                       </span>
-                     </div>
-                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
                        <span className="text-gray-500">Detected Names</span>
                        <span className="max-w-[65%] text-right text-gray-300 break-words">
                          {detectedNames.length ? detectedNames.join(', ') : 'None'}
+                       </span>
+                     </div>
+                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
+                       <span className="text-gray-500">Detection Method</span>
+                       <span className="max-w-[65%] text-right text-gray-300 uppercase">
+                         {selectedRecording?.participantDetectionMethod || 'None'}
                        </span>
                      </div>
                      <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
