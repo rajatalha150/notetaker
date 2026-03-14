@@ -7,12 +7,18 @@ export interface RecordingMeta {
   stoppedAt?: number;
   duration: number;
   status: RecordingStatus;
+  environment?: "extension" | "desktop";
   platform?: string;
   notes: Note[];
   transcription?: Transcription;
   summary?: string;
   downloadId?: number;
   filename?: string;
+  filePath?: string;
+  fileSize?: number;
+  sourceId?: string;
+  sourceName?: string;
+  mimeType?: string;
   userName?: string; // The name of "You"
   speakerEvents?: SpeakerEvent[]; // Log of who spoke when
 }

@@ -17,7 +17,7 @@ export function RecordingDetailPage() {
     queryFn: () => getRecording(id),
   });
 
-  const { transcription, transcribe, isTranscribing, transcriptionError } = useTranscription(id);
+  const { transcription, transcribe, transcribeSavedRecording, isTranscribing, transcriptionError } = useTranscription(id);
   const { summary, summarize, isSummarizing, summaryError } = useSummary(id);
 
   if (!recording) {
@@ -32,7 +32,16 @@ export function RecordingDetailPage() {
   const min = Math.floor(durationSec / 60);
   const sec = durationSec % 60;
 
-  const handleTranscribe = () => {
+  const handleTranscribe = async () => {
+    if (recording.filePath && recording.environment === "desktop") {
+      try {
+        await transcribeSavedRecording();
+        return;
+      } catch {
+        // Fall back to manual file selection when desktop IPC is unavailable.
+      }
+    }
+
     fileInputRef.current?.click();
   };
 
@@ -112,7 +121,9 @@ export function RecordingDetailPage() {
 
       {!transcription && !isTranscribing && (
         <p className="text-xs text-gray-600">
-          Select the downloaded recording file to transcribe it.
+          {recording.filePath && recording.environment === "desktop"
+            ? "This desktop recording can be transcribed directly from the saved file."
+            : "Select the downloaded recording file to transcribe it."}
         </p>
       )}
 

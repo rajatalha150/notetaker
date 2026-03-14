@@ -1,0 +1,37 @@
+import { contextBridge, ipcRenderer } from 'electron'
+
+const desktop = {
+  listSources() {
+    return ipcRenderer.invoke('get-sources') as Promise<Array<{ id: string; name: string; thumbnail: string }>>
+  },
+  saveRecording(filename: string, data: ArrayBuffer) {
+    return ipcRenderer.invoke('desktop-save-recording', { filename, data }) as Promise<{
+      filePath: string
+      filename: string
+      fileSize: number
+    }>
+  },
+  readRecording(filePath: string) {
+    return ipcRenderer.invoke('desktop-read-recording', { filePath }) as Promise<ArrayBuffer>
+  },
+  deleteRecording(filePath: string) {
+    return ipcRenderer.invoke('desktop-delete-recording', { filePath }) as Promise<{ ok: true }>
+  },
+}
+
+contextBridge.exposeInMainWorld('electron', {
+  desktop,
+  ipcRenderer: {
+    send(channel: string, data: any) {
+      ipcRenderer.send(channel, data)
+    },
+    on(channel: string, func: (...args: any[]) => void) {
+      const subscription = (_event: any, ...args: any[]) => func(...args)
+      ipcRenderer.on(channel, subscription)
+      return () => ipcRenderer.removeListener(channel, subscription)
+    },
+    invoke(channel: string, ...args: any[]) {
+      return ipcRenderer.invoke(channel, ...args)
+    }
+  }
+})

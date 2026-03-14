@@ -1,3 +1,12 @@
 node_modules
 dist
 *.local
+dist-electron
+release
+*.tsbuildinfo
+dist.crx
+dist.pem
+**/node_modules
+**/dist
+**/dist-electron
+**/release

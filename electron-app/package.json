@@ -1,0 +1,53 @@
+{
+  "name": "notetaker-desktop",
+  "version": "0.1.0",
+  "main": "dist-electron/main.js",
+  "description": "Desktop version of Notetaker by Peak Services Inc.",
+  "author": "Peak Services Inc.",
+  "license": "Proprietary",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "@tanstack/react-query": "^5.62.0",
+    "@tanstack/react-router": "^1.92.0",
+    "lucide-react": "^0.453.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
+    "@tailwindcss/vite": "^4.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.27",
+    "electron": "^33.0.0",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^5.4.0",
+    "vite-plugin-electron": "^0.28.0",
+    "vite-plugin-electron-renderer": "^0.14.5"
+  },
+  "build": {
+    "appId": "com.peakservices.notetaker",
+    "productName": "Notetaker",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist",
+      "dist-electron"
+    ],
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Utility"
+    },
+    "win": {
+      "target": ["portable", "nsis"]
+    }
+  }
+}

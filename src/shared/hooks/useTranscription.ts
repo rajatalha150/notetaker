@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { transcribe, diarizeSpeakers } from "../api/providers";
 import { getRecording, saveRecording } from "../storage/metadata";
+import { getRecordingAudioFile } from "../recording-assets";
 import type { Transcription } from "../types";
 
 export function useTranscription(recordingId: string | undefined) {
@@ -17,8 +18,8 @@ export function useTranscription(recordingId: string | undefined) {
   });
 
   const transcribeMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const result = await transcribe(file);
+    mutationFn: async (audio: Blob) => {
+      const result = await transcribe(audio);
       try {
         if (!recordingId) throw new Error("No recording ID");
         const meta = await getRecording(recordingId);
@@ -43,9 +44,16 @@ export function useTranscription(recordingId: string | undefined) {
     },
   });
 
+  const transcribeSavedRecording = async () => {
+    if (!recordingId) throw new Error("No recording ID");
+    const file = await getRecordingAudioFile(recordingId);
+    transcribeMutation.mutate(file);
+  };
+
   return {
     transcription,
     transcribe: transcribeMutation.mutate,
+    transcribeSavedRecording,
     isTranscribing: transcribeMutation.isPending,
     transcriptionError: transcribeMutation.error,
   };

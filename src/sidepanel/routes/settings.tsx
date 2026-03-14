@@ -194,7 +194,7 @@ export function SettingsPage() {
               </select>
               {settings.transcriptionProvider === "local" && (
                 <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  <strong>Local mode:</strong> The AI model runs <i>entirely inside your browser</i>.
+                  <strong>Local mode:</strong> The AI model runs <i>entirely on your device</i>.
                   It's 100% private and free. The first transcription will download the model (~40-80MB) automatically.
                 </p>
               )}
@@ -244,7 +244,7 @@ export function SettingsPage() {
               </select>
               {settings.summarizationProvider === "local" && (
                 <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  <strong>Local mode:</strong> The AI runs <i>entirely inside your browser</i> privately.
+                  <strong>Local mode:</strong> The AI runs <i>entirely on your device</i> privately.
                   However, text models are large. The first run will download <strong>~350MB-2GB</strong> of data and may take several minutes to process.
                 </p>
               )}
