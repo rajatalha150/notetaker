@@ -231,6 +231,12 @@ export function App() {
   const speakerEventCount = selectedRecording?.speakerEvents?.length ?? 0
   const speakerEvents = selectedRecording?.speakerEvents ?? []
 
+  const navItems: Array<{ key: typeof activeTab; label: string; icon: React.ReactNode }> = [
+    { key: 'record', label: 'Studio', icon: <Mic size={14} /> },
+    { key: 'history', label: 'Library', icon: <History size={14} /> },
+    { key: 'settings', label: 'Settings', icon: <Settings size={14} /> },
+  ]
+
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden font-sans">
       {/* Sidebar Navigation */}
@@ -260,21 +266,43 @@ export function App() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-b from-gray-950 to-black">
         {/* Header */}
-        <header className="h-14 flex items-center px-6 border-b border-gray-900 bg-black/40 backdrop-blur-xl justify-between window-drag">
-          <div className="flex items-center gap-3">
-            {selectedRecordingId && (
-              <button onClick={() => setSelectedRecordingId(null)} className="p-1 hover:bg-gray-800 rounded-lg text-gray-500 hover:text-white transition-colors">
-                <ChevronLeft size={20} />
-              </button>
-            )}
-            <h1 className="text-sm font-semibold tracking-tight text-white uppercase tracking-widest">
-              {selectedRecordingId ? 'Recording Detail' : activeTab === 'record' ? 'Studio' : activeTab === 'history' ? 'Library' : 'Settings'}
-            </h1>
+        <header className="flex flex-col gap-3 px-6 py-3 border-b border-gray-900 bg-black/50 backdrop-blur-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {selectedRecordingId && (
+                <button onClick={() => setSelectedRecordingId(null)} className="p-1 hover:bg-gray-800 rounded-lg text-gray-500 hover:text-white transition-colors">
+                  <ChevronLeft size={20} />
+                </button>
+              )}
+              <h1 className="text-base font-semibold tracking-tight text-white uppercase tracking-widest">
+                {selectedRecordingId ? 'Recording Detail' : activeTab === 'record' ? 'Studio' : activeTab === 'history' ? 'Library' : 'Settings'}
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${(status === 'recording' || status === 'paused') ? 'bg-red-500 animate-pulse' : 'bg-gray-700'}`}></span>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Notetaker Desktop</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${(status === 'recording' || status === 'paused') ? 'bg-red-500 animate-pulse' : 'bg-gray-700'}`}></span>
-            <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Notetaker Desktop</span>
-          </div>
+
+          <nav className="flex items-center gap-2">
+            {navItems.map((item) => {
+              const isActive = activeTab === item.key && !selectedRecordingId
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => { setActiveTab(item.key); setSelectedRecordingId(null); }}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                    isActive
+                      ? 'bg-white text-black shadow-lg'
+                      : 'bg-gray-900/60 text-gray-400 hover:text-white hover:bg-gray-800/80'
+                  }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              )
+            })}
+          </nav>
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">

@@ -225,8 +225,8 @@ function assertManagedRecordingPath(filePath: string) {
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC || '', 'electron-vite.svg'),
-    width: 400,
-    height: 700,
+    width: 800,
+    height: 1200,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
