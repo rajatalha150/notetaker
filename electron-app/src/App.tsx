@@ -29,6 +29,17 @@ import { useSummary } from '@shared/hooks/useSummary'
 import type { RecordingMeta } from '@shared/types'
 import type { DesktopSource } from './electron'
 
+function formatSpeakerEventTime(timestamp: number) {
+  const totalSeconds = Math.max(0, Math.floor(timestamp / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  return [hours, minutes, seconds]
+    .map((value) => value.toString().padStart(2, '0'))
+    .join(':')
+}
+
 export function App() {
   const [activeTab, setActiveTab] = useState<'record' | 'history' | 'settings'>('record')
   const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null)
@@ -218,6 +229,7 @@ export function App() {
   const detectedNames = selectedRecording?.detectedParticipantNames ?? []
   const manualNames = selectedRecording?.participantNames ?? []
   const speakerEventCount = selectedRecording?.speakerEvents?.length ?? 0
+  const speakerEvents = selectedRecording?.speakerEvents ?? []
 
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden font-sans">
@@ -380,6 +392,29 @@ export function App() {
                        Save
                      </button>
                    </div>
+                 </div>
+
+                 <div className="mb-6 rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">
+                     Speaker Timeline
+                   </label>
+                   {speakerEvents.length ? (
+                     <div className="space-y-2">
+                       {speakerEvents.slice(-12).map((event, index) => (
+                         <div
+                           key={`${event.name}-${event.timestamp}-${index}`}
+                           className="flex items-center justify-between gap-4 rounded-xl border border-gray-900 bg-black/30 px-3 py-2 text-xs"
+                         >
+                           <span className="font-medium text-gray-200">{event.name}</span>
+                           <span className="font-mono text-gray-500">{formatSpeakerEventTime(event.timestamp)}</span>
+                         </div>
+                       ))}
+                     </div>
+                   ) : (
+                     <p className="text-xs text-gray-500">
+                       No speaker events have been logged for this recording yet.
+                     </p>
+                   )}
                  </div>
                  
                  <div className="flex gap-3">

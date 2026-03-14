@@ -58,6 +58,7 @@ export function useDesktopRecorder() {
   const pausedDurationRef = useRef(0)
   const lastPausedAtRef = useRef<number | null>(null)
   const sourceRef = useRef<{ id: string; name?: string } | null>(null)
+  const externalSpeakerLabelRef = useRef('Speaker 2')
   const mimeTypeRef = useRef('audio/webm')
 
   const invalidateRecordingQueries = useCallback((id?: string | null) => {
@@ -213,6 +214,7 @@ export function useDesktopRecorder() {
     const detection = detectDesktopMeetingContext(sourceContext)
     const detectedParticipantNames = detection.detectedParticipantNames
     const externalName = detectedParticipantNames.length === 1 ? detectedParticipantNames[0] : undefined
+    externalSpeakerLabelRef.current = externalName || 'Speaker 2'
 
     let nextMeta: RecordingMeta = {
       ...meta,
@@ -251,6 +253,7 @@ export function useDesktopRecorder() {
     chunksRef.current = []
     pausedDurationRef.current = 0
     lastPausedAtRef.current = null
+    externalSpeakerLabelRef.current = 'Speaker 2'
 
     const id = crypto.randomUUID()
     const startedAt = Date.now()
@@ -359,7 +362,7 @@ export function useDesktopRecorder() {
             smoothedSystemLevel > smoothedMicLevel + dominanceGap &&
             smoothedSystemLevel > smoothedMicLevel * dominanceRatio
           ) {
-            dominantSpeaker = 'Speaker 2'
+            dominantSpeaker = externalSpeakerLabelRef.current
           }
 
           if (!dominantSpeaker) {
@@ -515,6 +518,9 @@ export function useDesktopRecorder() {
       meta.platform = detection.platform ?? meta.platform
       meta.detectedParticipantNames = detection.detectedParticipantNames
       meta.participantDetectionMethod = detection.detectionMethod
+      externalSpeakerLabelRef.current = detection.detectedParticipantNames.length === 1
+        ? detection.detectedParticipantNames[0]
+        : 'Speaker 2'
 
       await saveRecording(meta)
       invalidateRecordingQueries(id)
