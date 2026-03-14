@@ -215,6 +215,10 @@ export function App() {
     }
   }
 
+  const detectedNames = selectedRecording?.detectedParticipantNames ?? []
+  const manualNames = selectedRecording?.participantNames ?? []
+  const speakerEventCount = selectedRecording?.speakerEvents?.length ?? 0
+
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden font-sans">
       {/* Sidebar Navigation */}
@@ -297,6 +301,50 @@ export function App() {
                        No participant names were found in native app metadata for this capture.
                      </p>
                    )}
+                 </div>
+
+                 <div className="mb-6 rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">
+                     Detection Diagnostics
+                   </label>
+                   <div className="space-y-3 text-xs">
+                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
+                       <span className="text-gray-500">Source Title</span>
+                       <span className="max-w-[65%] text-right text-gray-300 break-words">
+                         {selectedRecording?.sourceName || 'Unavailable'}
+                       </span>
+                     </div>
+                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
+                       <span className="text-gray-500">Detected Platform</span>
+                       <span className="max-w-[65%] text-right text-gray-300">
+                         {selectedRecording?.platform || 'Unknown'}
+                       </span>
+                     </div>
+                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
+                       <span className="text-gray-500">Detection Method</span>
+                       <span className="max-w-[65%] text-right text-gray-300 uppercase">
+                         {selectedRecording?.participantDetectionMethod || 'None'}
+                       </span>
+                     </div>
+                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
+                       <span className="text-gray-500">Detected Names</span>
+                       <span className="max-w-[65%] text-right text-gray-300 break-words">
+                         {detectedNames.length ? detectedNames.join(', ') : 'None'}
+                       </span>
+                     </div>
+                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
+                       <span className="text-gray-500">Manual Fallback Names</span>
+                       <span className="max-w-[65%] text-right text-gray-300 break-words">
+                         {manualNames.length ? manualNames.join(', ') : 'None'}
+                       </span>
+                     </div>
+                     <div className="flex items-start justify-between gap-4">
+                       <span className="text-gray-500">Speaker Events Logged</span>
+                       <span className="max-w-[65%] text-right text-gray-300">
+                         {speakerEventCount}
+                       </span>
+                     </div>
+                   </div>
                  </div>
 
                  <div className="mb-6 rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
