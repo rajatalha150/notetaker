@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getRecording, saveRecording } from '@shared/storage/metadata'
 import type { RecordingMeta, RecordingStatus, SpeakerEvent } from '@shared/types'
+import type { DesktopSourceMetadata } from '../electron'
 import { detectDesktopMeetingContext } from '../desktop-detector'
 
 export type DesktopRecorderStatus = 'idle' | 'recording' | 'paused' | 'stopped'
@@ -13,6 +14,14 @@ function buildRecordingTitle(startedAt: number, sourceName?: string) {
 
 function buildPlatformLabel(sourceName?: string) {
   return sourceName?.trim() ? `Desktop (${sourceName.trim()})` : 'Desktop App'
+}
+
+function buildSourceContext(sourceName?: string, metadata?: DesktopSourceMetadata | null) {
+  return {
+    sourceName: metadata?.sourceName || sourceName || '',
+    windowTitle: metadata?.windowTitle,
+    windowClass: metadata?.windowClass,
+  }
 }
 
 function getAnalyserLevel(analyser: AnalyserNode) {
@@ -194,21 +203,23 @@ export function useDesktopRecorder() {
     }
   }, [])
 
-  const updateDetectionMetadata = useCallback(async (sourceTitle: string) => {
+  const updateDetectionMetadata = useCallback(async (sourceContext: ReturnType<typeof buildSourceContext>) => {
     const id = recordingIdRef.current
     if (!id) return
 
     const meta = await getRecording(id)
     if (!meta) return
 
-    const detection = detectDesktopMeetingContext(sourceTitle)
+    const detection = detectDesktopMeetingContext(sourceContext)
     const detectedParticipantNames = detection.detectedParticipantNames
     const externalName = detectedParticipantNames.length === 1 ? detectedParticipantNames[0] : undefined
 
     let nextMeta: RecordingMeta = {
       ...meta,
-      sourceName: sourceTitle,
-      platform: detection.platform ?? meta.platform ?? buildPlatformLabel(sourceTitle),
+      sourceName: sourceContext.sourceName || meta.sourceName,
+      sourceWindowTitle: sourceContext.windowTitle,
+      sourceWindowClass: sourceContext.windowClass,
+      platform: detection.platform ?? meta.platform ?? buildPlatformLabel(sourceContext.sourceName || meta.sourceName),
       detectedParticipantNames,
       participantDetectionMethod: detection.detectionMethod,
     }
@@ -219,6 +230,8 @@ export function useDesktopRecorder() {
 
     const changed =
       nextMeta.sourceName !== meta.sourceName ||
+      nextMeta.sourceWindowTitle !== meta.sourceWindowTitle ||
+      nextMeta.sourceWindowClass !== meta.sourceWindowClass ||
       nextMeta.platform !== meta.platform ||
       JSON.stringify(nextMeta.detectedParticipantNames ?? []) !== JSON.stringify(meta.detectedParticipantNames ?? []) ||
       JSON.stringify(nextMeta.speakerEvents ?? []) !== JSON.stringify(meta.speakerEvents ?? []) ||
@@ -241,13 +254,14 @@ export function useDesktopRecorder() {
 
     const id = crypto.randomUUID()
     const startedAt = Date.now()
+    const initialSourceMetadata = await window.electron.desktop.getSourceMetadataById(sourceId)
+    const initialSourceContext = buildSourceContext(sourceName, initialSourceMetadata)
+    const resolvedSourceName = initialSourceContext.sourceName || sourceName
     recordingIdRef.current = id
     startedAtRef.current = startedAt
-    sourceRef.current = { id: sourceId, name: sourceName }
+    sourceRef.current = { id: sourceId, name: resolvedSourceName }
 
     try {
-      await updateDetectionMetadata(sourceName ?? '')
-
       const systemStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           mandatory: {
@@ -390,10 +404,15 @@ export function useDesktopRecorder() {
         const currentSource = sourceRef.current
         if (!currentSource) return
 
-        const liveSource = await window.electron.desktop.getSourceById(currentSource.id)
-        if (!liveSource?.name) return
+        const liveSourceMetadata = await window.electron.desktop.getSourceMetadataById(currentSource.id)
+        if (!liveSourceMetadata?.sourceName) return
 
-        await updateDetectionMetadata(liveSource.name)
+        sourceRef.current = {
+          id: currentSource.id,
+          name: liveSourceMetadata.sourceName,
+        }
+
+        await updateDetectionMetadata(buildSourceContext(liveSourceMetadata.sourceName, liveSourceMetadata))
       }, 4000)
 
       mimeTypeRef.current = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -423,23 +442,27 @@ export function useDesktopRecorder() {
 
             const meta = (await getRecording(currentRecordingId)) ?? {
               id: currentRecordingId,
-              title: buildRecordingTitle(startedAt, sourceName),
+              title: buildRecordingTitle(startedAt, resolvedSourceName),
               startedAt,
               duration: recordingDuration,
               status: 'stopped',
               environment: 'desktop',
-              platform: buildPlatformLabel(sourceName),
+              platform: buildPlatformLabel(resolvedSourceName),
               notes: [],
               speakerEvents: [],
             }
 
-            const detection = detectDesktopMeetingContext(meta.sourceName ?? sourceName ?? '')
+            const detection = detectDesktopMeetingContext({
+              sourceName: meta.sourceName ?? resolvedSourceName ?? '',
+              windowTitle: meta.sourceWindowTitle,
+              windowClass: meta.sourceWindowClass,
+            })
             const detectedParticipantNames = detection.detectedParticipantNames
             const externalName = detectedParticipantNames.length === 1 ? detectedParticipantNames[0] : undefined
 
             meta.status = 'stopped'
             meta.environment = 'desktop'
-            meta.platform = detection.platform ?? meta.platform ?? buildPlatformLabel(sourceName)
+            meta.platform = detection.platform ?? meta.platform ?? buildPlatformLabel(resolvedSourceName)
             meta.stoppedAt = Date.now()
             meta.duration = recordingDuration
             meta.filename = savedFile.filename
@@ -447,7 +470,9 @@ export function useDesktopRecorder() {
             meta.fileSize = savedFile.fileSize
             meta.mimeType = mimeTypeRef.current
             meta.sourceId = sourceId
-            meta.sourceName = meta.sourceName ?? sourceName
+            meta.sourceName = meta.sourceName ?? resolvedSourceName
+            meta.sourceWindowTitle = meta.sourceWindowTitle ?? initialSourceContext.windowTitle
+            meta.sourceWindowClass = meta.sourceWindowClass ?? initialSourceContext.windowClass
             meta.userName = captureMic ? 'You' : undefined
             meta.detectedParticipantNames = detectedParticipantNames
             meta.participantDetectionMethod = detection.detectionMethod
@@ -470,21 +495,23 @@ export function useDesktopRecorder() {
 
       const meta: RecordingMeta = {
         id,
-        title: buildRecordingTitle(startedAt, sourceName),
+        title: buildRecordingTitle(startedAt, resolvedSourceName),
         startedAt,
         duration: 0,
         status: 'recording',
         environment: 'desktop',
-        platform: buildPlatformLabel(sourceName),
+        platform: buildPlatformLabel(resolvedSourceName),
         notes: [],
         speakerEvents: [],
         sourceId,
-        sourceName,
+        sourceName: resolvedSourceName,
+        sourceWindowTitle: initialSourceContext.windowTitle,
+        sourceWindowClass: initialSourceContext.windowClass,
         mimeType: mimeTypeRef.current,
         userName: captureMic ? 'You' : undefined,
       }
 
-      const detection = detectDesktopMeetingContext(sourceName)
+      const detection = detectDesktopMeetingContext(initialSourceContext)
       meta.platform = detection.platform ?? meta.platform
       meta.detectedParticipantNames = detection.detectedParticipantNames
       meta.participantDetectionMethod = detection.detectionMethod

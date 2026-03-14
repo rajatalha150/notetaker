@@ -4,6 +4,13 @@ export interface DesktopSource {
   thumbnail: string
 }
 
+export interface DesktopSourceMetadata {
+  sourceId: string
+  sourceName: string
+  windowTitle?: string
+  windowClass?: string
+}
+
 export interface DesktopRecordingSaveResult {
   filePath: string
   filename: string
@@ -16,6 +23,7 @@ declare global {
       desktop: {
         listSources(): Promise<DesktopSource[]>
         getSourceById(id: string): Promise<DesktopSource | null>
+        getSourceMetadataById(id: string): Promise<DesktopSourceMetadata | null>
         saveRecording(filename: string, data: ArrayBuffer): Promise<DesktopRecordingSaveResult>
         readRecording(filePath: string): Promise<ArrayBuffer>
         deleteRecording(filePath: string): Promise<{ ok: true }>

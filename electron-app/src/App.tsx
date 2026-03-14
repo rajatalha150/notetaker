@@ -283,7 +283,7 @@ export function App() {
                    {selectedRecording?.detectedParticipantNames?.length ? (
                      <div className="space-y-2">
                        <p className="text-xs text-gray-400">
-                         Real participant names were detected from native app window data.
+                         Real participant names were detected from native app window metadata without AI.
                        </p>
                        <div className="flex flex-wrap gap-2">
                          {selectedRecording.detectedParticipantNames.map((name) => (
@@ -312,6 +312,18 @@ export function App() {
                        <span className="text-gray-500">Source Title</span>
                        <span className="max-w-[65%] text-right text-gray-300 break-words">
                          {selectedRecording?.sourceName || 'Unavailable'}
+                       </span>
+                     </div>
+                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
+                       <span className="text-gray-500">Window Title</span>
+                       <span className="max-w-[65%] text-right text-gray-300 break-words">
+                         {selectedRecording?.sourceWindowTitle || 'Unavailable'}
+                       </span>
+                     </div>
+                     <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">
+                       <span className="text-gray-500">Window Class</span>
+                       <span className="max-w-[65%] text-right text-gray-300 break-words">
+                         {selectedRecording?.sourceWindowClass || 'Unavailable'}
                        </span>
                      </div>
                      <div className="flex items-start justify-between gap-4 border-b border-gray-900 pb-2">

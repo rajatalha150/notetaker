@@ -17,7 +17,7 @@ Unlike the browser extension which is limited to capturing tab audio, **Notetake
 - **Split-Channel Recording**: Automatically panner logic (Mic on Left, System on Right) to assist in AI diarization.
 - **File-Backed Library**: Recordings are persisted as real `.webm` files in the Electron app data directory and surfaced through the shared metadata library.
 - **Direct AI Processing**: Saved desktop recordings can be reopened and transcribed directly from the desktop detail view using the shared provider pipeline.
-- **Deterministic Native Detection**: Before relying on manual hints, the desktop app attempts to derive platform and participant names from live native source/window titles using app-specific parsing rules.
+- **Deterministic Native Detection**: Before relying on manual hints, the desktop app attempts to derive platform and participant names from live native window metadata first, then source/window titles, using app-specific parsing rules.
 - **Shared Metadata & Settings**: Reuses the shared metadata schema, settings UI, and AI hooks through the `chrome-shim`.
 - **Portable Distribution**: Packaged as a single `.AppImage` for Linux and `.exe` for Windows.
 
@@ -48,8 +48,8 @@ To maintain code parity with the extension, we've implemented a `chrome-shim.ts`
 
 - Desktop recording, transcription, summary, and settings flows are now wired end to end.
 - Local AI assets are packaged under the paths expected by the shared WASM workers.
-- Desktop now performs deterministic participant detection from source titles and combines that with local speaker-event monitoring.
-- Native-app speaker-name detection is still less mature than the browser extension's DOM-driven detector when apps do not expose useful source-title metadata, and that remains the main parity gap.
+- Desktop now performs deterministic participant detection from native window metadata and source titles, and combines that with local speaker-event monitoring.
+- Native-app speaker-name detection is still less mature than the browser extension's DOM-driven detector when apps do not expose useful window metadata or titles, and that remains the main parity gap.
 
 ## License
 

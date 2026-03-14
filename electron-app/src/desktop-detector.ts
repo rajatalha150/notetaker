@@ -1,7 +1,13 @@
 export interface DesktopDetectionResult {
   platform?: string
   detectedParticipantNames: string[]
-  detectionMethod?: 'source-title'
+  detectionMethod?: 'source-title' | 'window-metadata'
+}
+
+export interface DesktopMeetingContextInput {
+  sourceName?: string
+  windowTitle?: string
+  windowClass?: string
 }
 
 interface PlatformRule {
@@ -141,26 +147,50 @@ const PLATFORM_RULES: PlatformRule[] = [
   },
 ]
 
-export function detectDesktopMeetingContext(sourceName?: string): DesktopDetectionResult {
-  const title = normalizeWhitespace(sourceName ?? '')
-  if (!title) {
+function buildSearchHaystack(input: DesktopMeetingContextInput) {
+  return [
+    normalizeWhitespace(input.windowClass ?? ''),
+    normalizeWhitespace(input.windowTitle ?? ''),
+    normalizeWhitespace(input.sourceName ?? ''),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
+function getDetectionMethod(input: DesktopMeetingContextInput) {
+  return input.windowClass || input.windowTitle ? 'window-metadata' : 'source-title'
+}
+
+function getTitleCandidates(input: DesktopMeetingContextInput) {
+  return unique([
+    normalizeWhitespace(input.windowTitle ?? ''),
+    normalizeWhitespace(input.sourceName ?? ''),
+  ].filter(Boolean))
+}
+
+export function detectDesktopMeetingContext(input: DesktopMeetingContextInput | string | undefined): DesktopDetectionResult {
+  const context = typeof input === 'string'
+    ? { sourceName: input }
+    : (input ?? {})
+
+  const haystack = buildSearchHaystack(context)
+  if (!haystack) {
     return { detectedParticipantNames: [] }
   }
 
-  const lower = title.toLowerCase()
-  const rule = PLATFORM_RULES.find((entry) => entry.markers.some((marker) => lower.includes(marker)))
-
+  const rule = PLATFORM_RULES.find((entry) => entry.markers.some((marker) => haystack.includes(marker)))
   if (!rule) {
     return { detectedParticipantNames: [] }
   }
 
   const detectedParticipantNames = unique(
-    rule.extractors.flatMap((extract) => extract(title))
+    getTitleCandidates(context).flatMap((title) => rule.extractors.flatMap((extract) => extract(title)))
   )
 
   return {
     platform: rule.platform,
     detectedParticipantNames,
-    detectionMethod: 'source-title',
+    detectionMethod: getDetectionMethod(context),
   }
 }

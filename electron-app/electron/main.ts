@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain, desktopCapturer } from 'electron'
+import { execFile } from 'node:child_process'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -14,12 +16,70 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
+const execFileAsync = promisify(execFile)
 
 function serializeSource(source: Electron.DesktopCapturerSource) {
   return {
     id: source.id,
     name: source.name,
     thumbnail: source.thumbnail.toDataURL(),
+  }
+}
+
+function parseX11WindowId(sourceId: string) {
+  const match = sourceId.match(/^window:(\d+):/)
+  if (!match) return null
+
+  const value = Number.parseInt(match[1], 10)
+  if (!Number.isFinite(value) || value <= 0) {
+    return null
+  }
+
+  return `0x${value.toString(16)}`
+}
+
+function parseXPropLine(output: string, key: string) {
+  return output
+    .split('\n')
+    .find((line) => line.trimStart().startsWith(key))
+    ?.trim()
+}
+
+function parseQuotedValues(line?: string) {
+  if (!line) return []
+
+  return Array.from(line.matchAll(/"([^"]+)"/g))
+    .map((match) => match[1]?.trim())
+    .filter((value): value is string => !!value)
+}
+
+async function getLinuxWindowMetadata(sourceId: string) {
+  if (process.platform !== 'linux') {
+    return null
+  }
+
+  const windowId = parseX11WindowId(sourceId)
+  if (!windowId) {
+    return null
+  }
+
+  try {
+    const { stdout } = await execFileAsync('xprop', ['-id', windowId, 'WM_CLASS', '_NET_WM_NAME', 'WM_NAME'])
+    const titleLine = parseXPropLine(stdout, '_NET_WM_NAME') ?? parseXPropLine(stdout, 'WM_NAME')
+    const classLine = parseXPropLine(stdout, 'WM_CLASS')
+    const [windowTitle] = parseQuotedValues(titleLine)
+    const windowClass = parseQuotedValues(classLine).join(' ').trim() || undefined
+
+    if (!windowTitle && !windowClass) {
+      return null
+    }
+
+    return {
+      windowTitle,
+      windowClass,
+    }
+  } catch {
+    return null
   }
 }
 
@@ -108,6 +168,22 @@ ipcMain.handle('get-source-by-id', async (_event, payload: { id: string }) => {
   const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] })
   const source = sources.find((entry) => entry.id === payload.id)
   return source ? serializeSource(source) : null
+})
+
+ipcMain.handle('get-source-metadata-by-id', async (_event, payload: { id: string }) => {
+  const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] })
+  const source = sources.find((entry) => entry.id === payload.id)
+  if (!source) {
+    return null
+  }
+
+  const metadata = await getLinuxWindowMetadata(source.id)
+  return {
+    sourceId: source.id,
+    sourceName: source.name,
+    windowTitle: metadata?.windowTitle,
+    windowClass: metadata?.windowClass,
+  }
 })
 
 ipcMain.handle('desktop-save-recording', async (_event, payload: { filename: string; data: ArrayBuffer }) => {

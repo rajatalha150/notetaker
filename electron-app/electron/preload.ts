@@ -7,6 +7,14 @@ const desktop = {
   getSourceById(id: string) {
     return ipcRenderer.invoke('get-source-by-id', { id }) as Promise<{ id: string; name: string; thumbnail: string } | null>
   },
+  getSourceMetadataById(id: string) {
+    return ipcRenderer.invoke('get-source-metadata-by-id', { id }) as Promise<{
+      sourceId: string
+      sourceName: string
+      windowTitle?: string
+      windowClass?: string
+    } | null>
+  },
   saveRecording(filename: string, data: ArrayBuffer) {
     return ipcRenderer.invoke('desktop-save-recording', { filename, data }) as Promise<{
       filePath: string

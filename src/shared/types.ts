@@ -18,11 +18,13 @@ export interface RecordingMeta {
   fileSize?: number;
   sourceId?: string;
   sourceName?: string;
+  sourceWindowTitle?: string;
+  sourceWindowClass?: string;
   mimeType?: string;
   userName?: string; // The name of "You"
   participantNames?: string[];
   detectedParticipantNames?: string[];
-  participantDetectionMethod?: "source-title";
+  participantDetectionMethod?: "source-title" | "window-metadata";
   speakerEvents?: SpeakerEvent[]; // Log of who spoke when
 }
 

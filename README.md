@@ -12,7 +12,7 @@ A privacy-first AI meeting assistant that silently records, transcribes, and sum
 - **Browser Extension** — Silent recording for Google Meet, Zoom, and Microsoft Teams tabs. No participants are notified.
 - **Native Desktop App** — "Studio" environment to capture high-quality audio from native apps like **Skype**, **Zoom Desktop**, **WhatsApp**, and **Teams Native**, then save and reopen those captures directly from the desktop library.
 - **AI Transcription** — Timestamped text via OpenAI Whisper, Groq, or high-performance **Local Models** (100% on-device).
-- **Speaker Detection** — Uses deterministic app data when available: browser DOM scraping on the extension side, and native window/source title parsing plus speaker-event monitoring on Desktop.
+- **Speaker Detection** — Uses deterministic app data when available: browser DOM scraping on the extension side, and native window metadata parsing plus speaker-event monitoring on Desktop.
 - **AI Summarization** — Structured meeting summaries with action items and key decisions.
 - **Privacy First** — All audio stays on your hardware. Use Local AI (WASM) to ensure no data ever leaves your machine.
 
@@ -57,7 +57,7 @@ Ideal for native apps and system-wide audio capture.
 
 The project utilizes a **Shared AI Core** and a **Chrome-Shim** layer. This allows the Desktop application to leverage the same encryption, storage, and AI logic as the extension, ensuring your meeting history is consistent across your entire device.
 
-Today the extension and desktop app share the same data model, AI pipeline, and settings UI, while persisting data in their own runtime-appropriate local stores. Desktop recordings are stored as real files managed by Electron, can be transcribed directly from the desktop library without manual file re-selection, and now attempt deterministic participant-name discovery from native source/window titles before falling back to manual hints.
+Today the extension and desktop app share the same data model, AI pipeline, and settings UI, while persisting data in their own runtime-appropriate local stores. Desktop recordings are stored as real files managed by Electron, can be transcribed directly from the desktop library without manual file re-selection, and now attempt deterministic participant-name discovery from native window metadata first, then source titles, before falling back to manual hints.
 
 ---
 
