@@ -15,6 +15,14 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 
+function serializeSource(source: Electron.DesktopCapturerSource) {
+  return {
+    id: source.id,
+    name: source.name,
+    thumbnail: source.thumbnail.toDataURL(),
+  }
+}
+
 function getRecordingsDir() {
   return path.join(app.getPath('userData'), 'recordings')
 }
@@ -93,11 +101,13 @@ app.whenReady().then(async () => {
 // IPC Handlers
 ipcMain.handle('get-sources', async () => {
   const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] })
-  return sources.map(source => ({
-    id: source.id,
-    name: source.name,
-    thumbnail: source.thumbnail.toDataURL(),
-  }))
+  return sources.map(serializeSource)
+})
+
+ipcMain.handle('get-source-by-id', async (_event, payload: { id: string }) => {
+  const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] })
+  const source = sources.find((entry) => entry.id === payload.id)
+  return source ? serializeSource(source) : null
 })
 
 ipcMain.handle('desktop-save-recording', async (_event, payload: { filename: string; data: ArrayBuffer }) => {

@@ -21,6 +21,8 @@ export interface RecordingMeta {
   mimeType?: string;
   userName?: string; // The name of "You"
   participantNames?: string[];
+  detectedParticipantNames?: string[];
+  participantDetectionMethod?: "source-title";
   speakerEvents?: SpeakerEvent[]; // Log of who spoke when
 }
 

@@ -4,6 +4,9 @@ const desktop = {
   listSources() {
     return ipcRenderer.invoke('get-sources') as Promise<Array<{ id: string; name: string; thumbnail: string }>>
   },
+  getSourceById(id: string) {
+    return ipcRenderer.invoke('get-source-by-id', { id }) as Promise<{ id: string; name: string; thumbnail: string } | null>
+  },
   saveRecording(filename: string, data: ArrayBuffer) {
     return ipcRenderer.invoke('desktop-save-recording', { filename, data }) as Promise<{
       filePath: string

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getRecording, saveRecording } from '@shared/storage/metadata'
 import type { RecordingMeta, RecordingStatus, SpeakerEvent } from '@shared/types'
+import { detectDesktopMeetingContext } from '../desktop-detector'
 
 export type DesktopRecorderStatus = 'idle' | 'recording' | 'paused' | 'stopped'
 
@@ -36,6 +37,7 @@ export function useDesktopRecorder() {
 
   const timerRef = useRef<number | null>(null)
   const speakerMonitorRef = useRef<number | null>(null)
+  const sourceDetectionMonitorRef = useRef<number | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mixedStreamRef = useRef<MediaStream | null>(null)
   const systemStreamRef = useRef<MediaStream | null>(null)
@@ -93,9 +95,17 @@ export function useDesktopRecorder() {
     }
   }, [])
 
+  const stopSourceDetectionMonitor = useCallback(() => {
+    if (sourceDetectionMonitorRef.current !== null) {
+      window.clearInterval(sourceDetectionMonitorRef.current)
+      sourceDetectionMonitorRef.current = null
+    }
+  }, [])
+
   const cleanupMedia = useCallback(async () => {
     stopTimer()
     stopSpeakerMonitor()
+    stopSourceDetectionMonitor()
     mediaRecorderRef.current = null
 
     mixedStreamRef.current?.getTracks().forEach((track) => track.stop())
@@ -111,7 +121,7 @@ export function useDesktopRecorder() {
     if (audioContext) {
       await audioContext.close().catch(() => undefined)
     }
-  }, [stopSpeakerMonitor, stopTimer])
+  }, [stopSourceDetectionMonitor, stopSpeakerMonitor, stopTimer])
 
   const updateStoredStatus = useCallback(async (nextStatus: RecordingStatus) => {
     const id = recordingIdRef.current
@@ -150,6 +160,76 @@ export function useDesktopRecorder() {
     }
   }, [getElapsedMs])
 
+  const normalizeDesktopSpeakerNames = useCallback((meta: RecordingMeta, externalName?: string) => {
+    if (!externalName) return meta
+
+    const normalizedSpeakerEvents = meta.speakerEvents?.map((event) => {
+      if (event.name === 'You') return event
+      return {
+        ...event,
+        name: externalName,
+      }
+    })
+
+    const normalizedTranscription = meta.transcription
+      ? {
+          ...meta.transcription,
+          segments: meta.transcription.segments.map((segment) => {
+            if (!segment.speaker || segment.speaker === 'You') {
+              return segment
+            }
+
+            return {
+              ...segment,
+              speaker: externalName,
+            }
+          }),
+        }
+      : meta.transcription
+
+    return {
+      ...meta,
+      speakerEvents: normalizedSpeakerEvents,
+      transcription: normalizedTranscription,
+    }
+  }, [])
+
+  const updateDetectionMetadata = useCallback(async (sourceTitle: string) => {
+    const id = recordingIdRef.current
+    if (!id) return
+
+    const meta = await getRecording(id)
+    if (!meta) return
+
+    const detection = detectDesktopMeetingContext(sourceTitle)
+    const detectedParticipantNames = detection.detectedParticipantNames
+    const externalName = detectedParticipantNames.length === 1 ? detectedParticipantNames[0] : undefined
+
+    let nextMeta: RecordingMeta = {
+      ...meta,
+      sourceName: sourceTitle,
+      platform: detection.platform ?? meta.platform ?? buildPlatformLabel(sourceTitle),
+      detectedParticipantNames,
+      participantDetectionMethod: detection.detectionMethod,
+    }
+
+    if (externalName) {
+      nextMeta = normalizeDesktopSpeakerNames(nextMeta, externalName)
+    }
+
+    const changed =
+      nextMeta.sourceName !== meta.sourceName ||
+      nextMeta.platform !== meta.platform ||
+      JSON.stringify(nextMeta.detectedParticipantNames ?? []) !== JSON.stringify(meta.detectedParticipantNames ?? []) ||
+      JSON.stringify(nextMeta.speakerEvents ?? []) !== JSON.stringify(meta.speakerEvents ?? []) ||
+      JSON.stringify(nextMeta.transcription ?? null) !== JSON.stringify(meta.transcription ?? null)
+
+    if (!changed) return
+
+    await saveRecording(nextMeta)
+    invalidateRecordingQueries(id)
+  }, [invalidateRecordingQueries, normalizeDesktopSpeakerNames])
+
   const startRecording = useCallback(async (sourceId: string, captureMic: boolean, sourceName?: string) => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       throw new Error('A desktop recording is already in progress')
@@ -166,6 +246,8 @@ export function useDesktopRecorder() {
     sourceRef.current = { id: sourceId, name: sourceName }
 
     try {
+      await updateDetectionMetadata(sourceName ?? '')
+
       const systemStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           mandatory: {
@@ -304,6 +386,16 @@ export function useDesktopRecorder() {
 
       mixedStreamRef.current = finalStream
 
+      sourceDetectionMonitorRef.current = window.setInterval(async () => {
+        const currentSource = sourceRef.current
+        if (!currentSource) return
+
+        const liveSource = await window.electron.desktop.getSourceById(currentSource.id)
+        if (!liveSource?.name) return
+
+        await updateDetectionMetadata(liveSource.name)
+      }, 4000)
+
       mimeTypeRef.current = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : 'audio/webm'
@@ -341,9 +433,13 @@ export function useDesktopRecorder() {
               speakerEvents: [],
             }
 
+            const detection = detectDesktopMeetingContext(meta.sourceName ?? sourceName ?? '')
+            const detectedParticipantNames = detection.detectedParticipantNames
+            const externalName = detectedParticipantNames.length === 1 ? detectedParticipantNames[0] : undefined
+
             meta.status = 'stopped'
             meta.environment = 'desktop'
-            meta.platform = buildPlatformLabel(sourceName)
+            meta.platform = detection.platform ?? meta.platform ?? buildPlatformLabel(sourceName)
             meta.stoppedAt = Date.now()
             meta.duration = recordingDuration
             meta.filename = savedFile.filename
@@ -351,10 +447,16 @@ export function useDesktopRecorder() {
             meta.fileSize = savedFile.fileSize
             meta.mimeType = mimeTypeRef.current
             meta.sourceId = sourceId
-            meta.sourceName = sourceName
+            meta.sourceName = meta.sourceName ?? sourceName
             meta.userName = captureMic ? 'You' : undefined
+            meta.detectedParticipantNames = detectedParticipantNames
+            meta.participantDetectionMethod = detection.detectionMethod
 
-            await saveRecording(meta)
+            const finalMeta = externalName
+              ? normalizeDesktopSpeakerNames(meta, externalName)
+              : meta
+
+            await saveRecording(finalMeta)
             invalidateRecordingQueries(currentRecordingId)
           }
         } finally {
@@ -381,6 +483,11 @@ export function useDesktopRecorder() {
         mimeType: mimeTypeRef.current,
         userName: captureMic ? 'You' : undefined,
       }
+
+      const detection = detectDesktopMeetingContext(sourceName)
+      meta.platform = detection.platform ?? meta.platform
+      meta.detectedParticipantNames = detection.detectedParticipantNames
+      meta.participantDetectionMethod = detection.detectionMethod
 
       await saveRecording(meta)
       invalidateRecordingQueries(id)

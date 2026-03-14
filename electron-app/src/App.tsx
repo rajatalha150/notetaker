@@ -174,15 +174,18 @@ export function App() {
     try {
       const trimmed = participantHint.trim()
       const nextParticipantNames = trimmed ? [trimmed] : []
-      const nextSpeakerEvents = selectedRecording.speakerEvents?.map((event) => {
-        if (event.name === 'You') return event
-        return {
-          ...event,
-          name: trimmed || 'Speaker 2',
-        }
-      })
+      const shouldNormalizeGenericSpeaker = !(selectedRecording.detectedParticipantNames?.length)
+      const nextSpeakerEvents = shouldNormalizeGenericSpeaker
+        ? selectedRecording.speakerEvents?.map((event) => {
+            if (event.name === 'You') return event
+            return {
+              ...event,
+              name: trimmed || 'Speaker 2',
+            }
+          })
+        : selectedRecording.speakerEvents
 
-      const nextTranscription = selectedRecording.transcription
+      const nextTranscription = shouldNormalizeGenericSpeaker && selectedRecording.transcription
         ? {
             ...selectedRecording.transcription,
             segments: selectedRecording.transcription.segments.map((segment) => {
@@ -271,10 +274,37 @@ export function App() {
 
                  <div className="mb-6 rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
                    <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
-                     Other Speaker Hint
+                     App Detection
+                   </label>
+                   {selectedRecording?.detectedParticipantNames?.length ? (
+                     <div className="space-y-2">
+                       <p className="text-xs text-gray-400">
+                         Real participant names were detected from native app window data.
+                       </p>
+                       <div className="flex flex-wrap gap-2">
+                         {selectedRecording.detectedParticipantNames.map((name) => (
+                           <span
+                             key={name}
+                             className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300"
+                           >
+                             {name}
+                           </span>
+                         ))}
+                       </div>
+                     </div>
+                   ) : (
+                     <p className="text-xs text-gray-500">
+                       No participant names were found in native app metadata for this capture.
+                     </p>
+                   )}
+                 </div>
+
+                 <div className="mb-6 rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
+                     Manual Fallback Hint
                    </label>
                    <p className="text-xs text-gray-500 mb-3">
-                     Set the main other participant name before retranscribing to help native-app speaker labeling.
+                     Use this only when the native app does not expose participant names. It does not replace detected app names.
                    </p>
                    <div className="flex gap-2">
                      <input

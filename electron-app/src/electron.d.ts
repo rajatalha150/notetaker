@@ -15,6 +15,7 @@ declare global {
     electron: {
       desktop: {
         listSources(): Promise<DesktopSource[]>
+        getSourceById(id: string): Promise<DesktopSource | null>
         saveRecording(filename: string, data: ArrayBuffer): Promise<DesktopRecordingSaveResult>
         readRecording(filePath: string): Promise<ArrayBuffer>
         deleteRecording(filePath: string): Promise<{ ok: true }>

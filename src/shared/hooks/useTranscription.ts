@@ -23,11 +23,15 @@ export function useTranscription(recordingId: string | undefined) {
       try {
         if (!recordingId) throw new Error("No recording ID");
         const meta = await getRecording(recordingId);
+        const participantNames = Array.from(new Set([
+          ...(meta?.detectedParticipantNames ?? []),
+          ...(meta?.participantNames ?? []),
+        ]));
         const diarized = await diarizeSpeakers(
           result.segments, 
           meta?.userName, 
           meta?.speakerEvents,
-          meta?.participantNames
+          participantNames
         );
         return { ...result, segments: diarized };
       } catch {
