@@ -228,6 +228,7 @@ export function useDesktopRecorder() {
             meta.mimeType = mimeTypeRef.current
             meta.sourceId = sourceId
             meta.sourceName = sourceName
+            meta.userName = captureMic ? 'You' : undefined
 
             await saveRecording(meta)
             invalidateRecordingQueries(currentRecordingId)
@@ -253,6 +254,7 @@ export function useDesktopRecorder() {
         sourceId,
         sourceName,
         mimeType: mimeTypeRef.current,
+        userName: captureMic ? 'You' : undefined,
       }
 
       await saveRecording(meta)
