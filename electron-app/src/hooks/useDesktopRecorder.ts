@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getRecording, saveRecording } from '@shared/storage/metadata'
-import type { RecordingMeta, RecordingStatus } from '@shared/types'
+import type { RecordingMeta, RecordingStatus, SpeakerEvent } from '@shared/types'
 
 export type DesktopRecorderStatus = 'idle' | 'recording' | 'paused' | 'stopped'
 
@@ -14,6 +14,19 @@ function buildPlatformLabel(sourceName?: string) {
   return sourceName?.trim() ? `Desktop (${sourceName.trim()})` : 'Desktop App'
 }
 
+function getAnalyserLevel(analyser: AnalyserNode) {
+  const buffer = new Uint8Array(analyser.fftSize)
+  analyser.getByteTimeDomainData(buffer)
+
+  let sum = 0
+  for (let i = 0; i < buffer.length; i += 1) {
+    const normalized = (buffer[i] - 128) / 128
+    sum += normalized * normalized
+  }
+
+  return Math.sqrt(sum / buffer.length)
+}
+
 export function useDesktopRecorder() {
   const queryClient = useQueryClient()
 
@@ -22,6 +35,7 @@ export function useDesktopRecorder() {
   const [elapsedTime, setElapsedTime] = useState(0)
 
   const timerRef = useRef<number | null>(null)
+  const speakerMonitorRef = useRef<number | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mixedStreamRef = useRef<MediaStream | null>(null)
   const systemStreamRef = useRef<MediaStream | null>(null)
@@ -72,8 +86,16 @@ export function useDesktopRecorder() {
     }, 1000)
   }, [stopTimer, syncElapsedTime])
 
+  const stopSpeakerMonitor = useCallback(() => {
+    if (speakerMonitorRef.current !== null) {
+      window.clearInterval(speakerMonitorRef.current)
+      speakerMonitorRef.current = null
+    }
+  }, [])
+
   const cleanupMedia = useCallback(async () => {
     stopTimer()
+    stopSpeakerMonitor()
     mediaRecorderRef.current = null
 
     mixedStreamRef.current?.getTracks().forEach((track) => track.stop())
@@ -89,7 +111,7 @@ export function useDesktopRecorder() {
     if (audioContext) {
       await audioContext.close().catch(() => undefined)
     }
-  }, [stopTimer])
+  }, [stopSpeakerMonitor, stopTimer])
 
   const updateStoredStatus = useCallback(async (nextStatus: RecordingStatus) => {
     const id = recordingIdRef.current
@@ -107,6 +129,26 @@ export function useDesktopRecorder() {
     await saveRecording(meta)
     invalidateRecordingQueries(id)
   }, [getElapsedMs, invalidateRecordingQueries])
+
+  const appendSpeakerEvent = useCallback(async (name: string) => {
+    const id = recordingIdRef.current
+    if (!id) return
+
+    const meta = await getRecording(id)
+    if (!meta) return
+
+    if (!meta.speakerEvents) {
+      meta.speakerEvents = []
+    }
+
+    const timestamp = getElapsedMs()
+    const lastEvent = meta.speakerEvents[meta.speakerEvents.length - 1]
+    if (!lastEvent || lastEvent.name !== name || timestamp - lastEvent.timestamp > 10000) {
+      const event: SpeakerEvent = { name, timestamp }
+      meta.speakerEvents.push(event)
+      await saveRecording(meta)
+    }
+  }, [getElapsedMs])
 
   const startRecording = useCallback(async (sourceId: string, captureMic: boolean, sourceName?: string) => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -163,20 +205,54 @@ export function useDesktopRecorder() {
         destination.channelCount = 2
 
         const systemSource = audioContext.createMediaStreamSource(new MediaStream([systemAudioTrack]))
+        const systemAnalyser = audioContext.createAnalyser()
+        systemAnalyser.fftSize = 2048
+        systemSource.connect(systemAnalyser)
         const systemPanner = audioContext.createStereoPanner()
         systemPanner.pan.value = 1
-        systemSource.connect(systemPanner)
+        systemAnalyser.connect(systemPanner)
         systemPanner.connect(destination)
 
         const micSource = audioContext.createMediaStreamSource(micStream)
+        const micAnalyser = audioContext.createAnalyser()
+        micAnalyser.fftSize = 2048
+        micSource.connect(micAnalyser)
         const micPanner = audioContext.createStereoPanner()
         micPanner.pan.value = -1
-        micSource.connect(micPanner)
+        micAnalyser.connect(micPanner)
         micPanner.connect(destination)
 
         micStreamRef.current = micStream
         audioContextRef.current = audioContext
         finalStream = destination.stream
+
+        let lastDominantSpeaker: string | null = null
+        speakerMonitorRef.current = window.setInterval(() => {
+          if (mediaRecorderRef.current?.state !== 'recording') return
+
+          const micLevel = getAnalyserLevel(micAnalyser)
+          const systemLevel = getAnalyserLevel(systemAnalyser)
+          const silenceFloor = 0.02
+          const dominanceGap = 0.01
+
+          if (micLevel < silenceFloor && systemLevel < silenceFloor) {
+            return
+          }
+
+          let dominantSpeaker: string | null = null
+          if (micLevel > systemLevel + dominanceGap) {
+            dominantSpeaker = 'You'
+          } else if (systemLevel > micLevel + dominanceGap) {
+            dominantSpeaker = 'Speaker 2'
+          }
+
+          if (!dominantSpeaker || dominantSpeaker === lastDominantSpeaker) {
+            return
+          }
+
+          lastDominantSpeaker = dominantSpeaker
+          void appendSpeakerEvent(dominantSpeaker)
+        }, 1500)
       }
 
       mixedStreamRef.current = finalStream
@@ -215,6 +291,7 @@ export function useDesktopRecorder() {
               environment: 'desktop',
               platform: buildPlatformLabel(sourceName),
               notes: [],
+              speakerEvents: [],
             }
 
             meta.status = 'stopped'
@@ -251,6 +328,7 @@ export function useDesktopRecorder() {
         environment: 'desktop',
         platform: buildPlatformLabel(sourceName),
         notes: [],
+        speakerEvents: [],
         sourceId,
         sourceName,
         mimeType: mimeTypeRef.current,
