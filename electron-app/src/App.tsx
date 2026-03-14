@@ -173,9 +173,36 @@ export function App() {
 
     try {
       const trimmed = participantHint.trim()
+      const nextParticipantNames = trimmed ? [trimmed] : []
+      const nextSpeakerEvents = selectedRecording.speakerEvents?.map((event) => {
+        if (event.name === 'You') return event
+        return {
+          ...event,
+          name: trimmed || 'Speaker 2',
+        }
+      })
+
+      const nextTranscription = selectedRecording.transcription
+        ? {
+            ...selectedRecording.transcription,
+            segments: selectedRecording.transcription.segments.map((segment) => {
+              if (!segment.speaker || segment.speaker === 'You') {
+                return segment
+              }
+
+              return {
+                ...segment,
+                speaker: trimmed || 'Speaker 2',
+              }
+            }),
+          }
+        : selectedRecording.transcription
+
       const updated: RecordingMeta = {
         ...selectedRecording,
-        participantNames: trimmed ? [trimmed] : [],
+        participantNames: nextParticipantNames,
+        speakerEvents: nextSpeakerEvents,
+        transcription: nextTranscription,
       }
       await saveRecording(updated)
       setSelectedRecording(updated)
