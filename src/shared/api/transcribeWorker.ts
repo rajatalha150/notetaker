@@ -10,7 +10,7 @@ if (!safeEnv.backends) safeEnv.backends = {};
 if (!safeEnv.backends.onnx) safeEnv.backends.onnx = {};
 if (!safeEnv.backends.onnx.wasm) safeEnv.backends.onnx.wasm = {};
 
-safeEnv.backends.onnx.wasm.wasmPaths = "/ort-wasm/";
+safeEnv.backends.onnx.wasm.wasmPaths = new URL("../ort-wasm/", import.meta.url).toString();
 safeEnv.backends.onnx.wasm.numThreads = 1;
 
 class PipelineSingleton {

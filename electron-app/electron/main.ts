@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer } from 'electron'
+import { app, BrowserWindow, ipcMain, desktopCapturer, systemPreferences } from 'electron'
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -142,6 +142,20 @@ async function getNativeWindowMetadata(sourceId: string): Promise<NativeWindowMe
   }
 
   return getLinuxWindowMetadata(sourceId)
+}
+
+async function requestMicPermission() {
+  if (process.platform === 'darwin') {
+    try {
+      const granted = await systemPreferences.askForMediaAccess('microphone')
+      return granted
+    } catch {
+      return false
+    }
+  }
+
+  // Windows/Linux rely on chromium prompt, nothing to pre-request
+  return true
 }
 
 async function getWindowsParticipants(sourceId: string): Promise<ParticipantProbeResult> {
@@ -334,4 +348,8 @@ ipcMain.handle('desktop-delete-recording', async (_event, payload: { filePath: s
   const filePath = assertManagedRecordingPath(payload.filePath)
   await rm(filePath, { force: true })
   return { ok: true }
+})
+
+ipcMain.handle('desktop-request-mic-permission', async () => {
+  return requestMicPermission()
 })

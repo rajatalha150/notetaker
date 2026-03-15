@@ -22,6 +22,9 @@ const desktop = {
       method: 'native-ui' | 'none'
     }>
   },
+  requestMicPermission() {
+    return ipcRenderer.invoke('desktop-request-mic-permission') as Promise<boolean>
+  },
   saveRecording(filename: string, data: ArrayBuffer) {
     return ipcRenderer.invoke('desktop-save-recording', { filename, data }) as Promise<{
       filePath: string

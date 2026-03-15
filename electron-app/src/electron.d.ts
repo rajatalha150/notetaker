@@ -31,6 +31,7 @@ declare global {
         getSourceById(id: string): Promise<DesktopSource | null>
         getSourceMetadataById(id: string): Promise<DesktopSourceMetadata | null>
         getParticipantsBySourceId(id: string): Promise<DesktopParticipantProbeResult>
+        requestMicPermission(): Promise<boolean>
         saveRecording(filename: string, data: ArrayBuffer): Promise<DesktopRecordingSaveResult>
         readRecording(filePath: string): Promise<ArrayBuffer>
         deleteRecording(filePath: string): Promise<{ ok: true }>

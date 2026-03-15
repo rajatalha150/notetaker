@@ -49,6 +49,8 @@ export function App() {
   const [recordings, setRecordings] = useState<RecordingMeta[]>([])
   const [selectedRecording, setSelectedRecording] = useState<RecordingMeta | null>(null)
   const [participantHint, setParticipantHint] = useState('')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
   
   const [errorInfo, setErrorInfo] = useState<string | null>(null);
 
@@ -60,7 +62,8 @@ export function App() {
     resumeRecording,
     reset,
     elapsedTime,
-    recordingId 
+    recordingId,
+    levels,
   } = useDesktopRecorder()
 
   useEffect(() => {
@@ -109,8 +112,17 @@ export function App() {
     } else {
       setSelectedRecording(null)
       setParticipantHint('')
+      setPreviewUrl(null)
     }
   }, [selectedRecordingId, transcription, summary])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
 
   useEffect(() => {
     loadRecordings()
@@ -176,6 +188,22 @@ export function App() {
       await transcribeSavedRecording()
     } catch (error) {
       setErrorInfo(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const handlePreview = async () => {
+    if (!selectedRecording?.filePath) return
+    setIsLoadingPreview(true)
+    try {
+      const buffer = await window.electron.desktop.readRecording(selectedRecording.filePath)
+      const blob = new Blob([buffer], { type: selectedRecording.mimeType || 'audio/webm' })
+      const url = URL.createObjectURL(blob)
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      setPreviewUrl(url)
+    } catch (error) {
+      setErrorInfo(error instanceof Error ? error.message : String(error))
+    } finally {
+      setIsLoadingPreview(false)
     }
   }
 
@@ -453,6 +481,13 @@ export function App() {
                  
                  <div className="flex gap-3">
                    <button 
+                    onClick={handlePreview}
+                    disabled={!selectedRecording?.filePath || isLoadingPreview}
+                    className="flex-1 py-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-900/60 disabled:text-gray-500 text-white text-xs font-bold rounded-2xl transition-all flex items-center justify-center gap-2"
+                   >
+                     <Play size={16} /> {isLoadingPreview ? 'Loading Audio...' : 'Preview Audio'}
+                   </button>
+                   <button 
                     onClick={handleTranscribe}
                     disabled={isTranscribing || !selectedRecording?.filePath}
                     className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-800 disabled:text-gray-500 text-white text-xs font-bold rounded-2xl transition-all flex items-center justify-center gap-2"
@@ -467,7 +502,16 @@ export function App() {
                      <Activity size={16} /> {isSummarizing ? 'Summarizing...' : summary ? 'Summarized' : 'Summarize'}
                    </button>
                  </div>
-               </div>
+                </div>
+
+               {previewUrl && (
+                 <div className="rounded-2xl border border-gray-800 bg-gray-950/40 p-4">
+                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
+                     Audio Preview
+                   </label>
+                   <audio controls src={previewUrl} className="w-full" />
+                 </div>
+               )}
 
                {transcription && <TranscriptionView transcription={transcription} />}
                {summary && <SummaryView summary={summary} />}
@@ -582,6 +626,27 @@ export function App() {
                         Return to Library
                       </button>
                     )}
+                  </div>
+
+                  <div className="w-full max-w-md flex flex-col gap-3 text-xs text-gray-500">
+                    <div className="flex items-center gap-2">
+                      <span className="w-16 text-right">Mic</span>
+                      <div className="flex-1 h-2 rounded-full bg-gray-800 overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 transition-all duration-200"
+                          style={{ width: `${Math.min(1, levels.mic * 8) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-16 text-right">System</span>
+                      <div className="flex-1 h-2 rounded-full bg-gray-800 overflow-hidden">
+                        <div
+                          className="h-full bg-blue-500 transition-all duration-200"
+                          style={{ width: `${Math.min(1, levels.system * 8) * 100}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
