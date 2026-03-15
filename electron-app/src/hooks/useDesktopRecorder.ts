@@ -44,6 +44,7 @@ export function useDesktopRecorder() {
   const [status, setStatus] = useState<DesktopRecorderStatus>('idle')
   const [recordingId, setRecordingId] = useState<string | null>(null)
   const [elapsedTime, setElapsedTime] = useState(0)
+  const [levels, setLevels] = useState<{ mic: number; system: number }>({ mic: 0, system: 0 })
 
   const timerRef = useRef<number | null>(null)
   const speakerMonitorRef = useRef<number | null>(null)
@@ -299,6 +300,21 @@ export function useDesktopRecorder() {
       throw new Error('A desktop recording is already in progress')
     }
 
+    const micOk = captureMic ? await window.electron.desktop.requestMicPermission() : true
+    if (!micOk) {
+      throw new Error('Microphone permission is required to record your voice.')
+    }
+
+    if (captureMic) {
+      // Warm up permission prompt early; discard this stream
+      try {
+        const warmup = await navigator.mediaDevices.getUserMedia({ audio: true })
+        warmup.getTracks().forEach((t) => t.stop())
+      } catch {
+        throw new Error('Microphone access was blocked. Please allow mic access and try again.')
+      }
+    }
+
     chunksRef.current = []
     pausedDurationRef.current = 0
     lastPausedAtRef.current = null
@@ -342,33 +358,33 @@ export function useDesktopRecorder() {
       if (captureMic) {
         const micStream = await navigator.mediaDevices.getUserMedia({
           audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
           },
         })
 
         const audioContext = new AudioContext()
         const destination = audioContext.createMediaStreamDestination()
-        destination.channelCount = 2
+        destination.channelCount = 1
 
         const systemSource = audioContext.createMediaStreamSource(new MediaStream([systemAudioTrack]))
         const systemAnalyser = audioContext.createAnalyser()
         systemAnalyser.fftSize = 2048
         systemSource.connect(systemAnalyser)
-        const systemPanner = audioContext.createStereoPanner()
-        systemPanner.pan.value = 1
-        systemAnalyser.connect(systemPanner)
-        systemPanner.connect(destination)
+        const systemGain = audioContext.createGain()
+        systemGain.gain.value = 0.9
+        systemAnalyser.connect(systemGain)
+        systemGain.connect(destination)
 
         const micSource = audioContext.createMediaStreamSource(micStream)
         const micAnalyser = audioContext.createAnalyser()
         micAnalyser.fftSize = 2048
+        const micGain = audioContext.createGain()
+        micGain.gain.value = 1.1
         micSource.connect(micAnalyser)
-        const micPanner = audioContext.createStereoPanner()
-        micPanner.pan.value = -1
-        micAnalyser.connect(micPanner)
-        micPanner.connect(destination)
+        micAnalyser.connect(micGain)
+        micGain.connect(destination)
 
         micStreamRef.current = micStream
         audioContextRef.current = audioContext
@@ -388,6 +404,7 @@ export function useDesktopRecorder() {
           const systemLevel = getAnalyserLevel(systemAnalyser)
           smoothedMicLevel = smoothedMicLevel === 0 ? micLevel : (smoothedMicLevel * 0.65) + (micLevel * 0.35)
           smoothedSystemLevel = smoothedSystemLevel === 0 ? systemLevel : (smoothedSystemLevel * 0.65) + (systemLevel * 0.35)
+          setLevels({ mic: smoothedMicLevel, system: smoothedSystemLevel })
 
           const silenceFloor = 0.02
           const dominanceGap = 0.01
@@ -398,6 +415,7 @@ export function useDesktopRecorder() {
           if (smoothedMicLevel < silenceFloor && smoothedSystemLevel < silenceFloor) {
             candidateSpeaker = null
             candidateCount = 0
+            setLevels({ mic: smoothedMicLevel, system: smoothedSystemLevel })
             return
           }
 
@@ -417,12 +435,14 @@ export function useDesktopRecorder() {
           if (!dominantSpeaker) {
             candidateSpeaker = null
             candidateCount = 0
+            setLevels({ mic: smoothedMicLevel, system: smoothedSystemLevel })
             return
           }
 
           if (dominantSpeaker === confirmedSpeaker) {
             candidateSpeaker = null
             candidateCount = 0
+            setLevels({ mic: smoothedMicLevel, system: smoothedSystemLevel })
             return
           }
 
@@ -434,11 +454,13 @@ export function useDesktopRecorder() {
 
           candidateCount += 1
           if (candidateCount < confirmationSamples) {
+            setLevels({ mic: smoothedMicLevel, system: smoothedSystemLevel })
             return
           }
 
           const now = getElapsedMs()
           if (lastConfirmedAt > 0 && now - lastConfirmedAt < switchCooldownMs) {
+            setLevels({ mic: smoothedMicLevel, system: smoothedSystemLevel })
             return
           }
 
@@ -447,7 +469,10 @@ export function useDesktopRecorder() {
           candidateCount = 0
           lastConfirmedAt = now
           void appendSpeakerEvent(dominantSpeaker)
+          setLevels({ mic: smoothedMicLevel, system: smoothedSystemLevel })
         }, 750)
+      } else {
+        setLevels({ mic: 0, system: 0 })
       }
 
       mixedStreamRef.current = finalStream
@@ -661,6 +686,7 @@ export function useDesktopRecorder() {
     status,
     recordingId,
     elapsedTime,
+    levels,
     startRecording,
     stopRecording,
     pauseRecording,
