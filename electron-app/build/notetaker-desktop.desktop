@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Notetaker
+Comment=Privacy-first AI meeting recorder, transcriber, and summarizer
+Exec=notetaker-desktop %U
+Terminal=false
+Type=Application
+Icon=notetaker-desktop
+Categories=AudioVideo;Audio;Utility;
+MimeType=audio/webm;audio/ogg;
+Keywords=meeting;record;transcribe;summarize;notes;ai;
+StartupNotify=true
+StartupWMClass=notetaker-desktop

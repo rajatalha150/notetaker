@@ -17,27 +17,138 @@ function formatDuration(ms: number): string {
   return `${h}h ${m}m`;
 }
 
-async function decodeAudio16kStereo(blob: Blob): Promise<{ left: Float32Array; right: Float32Array | null }> {
+async function decodeAudioChannels(blob: Blob): Promise<{
+  mono: Float32Array;
+  left: Float32Array | null;
+  right: Float32Array | null;
+  sampleRate: number;
+}> {
   const arrayBuffer = await blob.arrayBuffer();
   const audioContext = new window.AudioContext({ sampleRate: 16000 });
   const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
   const left = audioBuffer.getChannelData(0);
   let right: Float32Array | null = null;
+  let mono: Float32Array;
 
   if (audioBuffer.numberOfChannels >= 2) {
     right = audioBuffer.getChannelData(1);
 
-    // Check if the right channel is essentially silent (e.g. if mic was off)
-    let sum = 0;
-    for (let i = 0; i < right.length; i++) {
-      sum += right[i]! * right[i]!;
+    // Check if channels are actually different (stereo separation was applied)
+    let diffSum = 0;
+    const step = 100; // sample every 100th sample for speed
+    for (let i = 0; i < left.length; i += step) {
+      const d = left[i]! - (right[i] ?? 0);
+      diffSum += d * d;
     }
-    const rms = Math.sqrt(sum / right.length);
-    if (rms < 0.001) right = null;
+    const diffRms = Math.sqrt(diffSum / (left.length / step));
+
+    if (diffRms < 0.0005) {
+      // Channels are effectively identical — no stereo separation
+      right = null;
+      mono = left;
+    } else {
+      // Create mono mix for single-pass Whisper
+      mono = new Float32Array(left.length);
+      for (let i = 0; i < left.length; i++) {
+        mono[i] = (left[i]! + right[i]!) * 0.5;
+      }
+    }
+  } else {
+    mono = left;
   }
 
-  return { left, right };
+  await audioContext.close();
+  return { mono, left: audioBuffer.numberOfChannels >= 2 ? left : null, right, sampleRate: 16000 };
+}
+
+/**
+ * Compute per-segment speaker labels from stereo channel energy.
+ * Left = "You" (mic), Right = "Others" (system audio).
+ * Returns a speaker label for each segment based on which channel is dominant.
+ */
+function assignSpeakersFromChannels(
+  segments: { start: number; end: number; text: string }[],
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate: number,
+  userName?: string,
+  otherName?: string,
+): { start: number; end: number; text: string; speaker: string }[] {
+  return segments.map((seg) => {
+    const startSample = Math.floor(seg.start * sampleRate);
+    const endSample = Math.min(Math.floor(seg.end * sampleRate), left.length);
+
+    if (endSample <= startSample) {
+      return { ...seg, speaker: otherName || "Speaker 2" };
+    }
+
+    let leftEnergy = 0;
+    let rightEnergy = 0;
+    const step = Math.max(1, Math.floor((endSample - startSample) / 500)); // sample up to 500 points
+
+    for (let i = startSample; i < endSample; i += step) {
+      leftEnergy += left[i]! * left[i]!;
+      rightEnergy += right[i]! * right[i]!;
+    }
+
+    const totalEnergy = leftEnergy + rightEnergy;
+    if (totalEnergy < 1e-8) {
+      // Silence segment
+      return { ...seg, speaker: otherName || "Speaker 2" };
+    }
+
+    const leftRatio = leftEnergy / totalEnergy;
+
+    // Left channel > 60% energy → mic (You)
+    // Right channel > 60% energy → system (Others)
+    // Otherwise → whoever is louder, with a slight bias toward system audio
+    // since in most calls the other person talks more
+    if (leftRatio > 0.6) {
+      return { ...seg, speaker: userName || "You" };
+    } else if (leftRatio < 0.4) {
+      return { ...seg, speaker: otherName || "Speaker 2" };
+    } else {
+      // Ambiguous — assign to whichever is slightly louder
+      return { ...seg, speaker: leftRatio >= 0.5 ? (userName || "You") : (otherName || "Speaker 2") };
+    }
+  });
+}
+
+/**
+ * Merge speakerEvents from recording metadata into transcription segments.
+ * SpeakerEvents are timestamped labels like { name: "John", timestamp: 45000 }.
+ * For each segment, find the most recent speaker event that precedes it.
+ */
+export function mergeSpeakerEvents(
+  segments: { start: number; end: number; text: string; speaker?: string }[],
+  speakerEvents: { name: string; timestamp: number }[],
+): { start: number; end: number; text: string; speaker?: string }[] {
+  if (!speakerEvents.length) return segments;
+
+  // Sort events by timestamp
+  const sorted = [...speakerEvents].sort((a, b) => a.timestamp - b.timestamp);
+
+  return segments.map((seg) => {
+    // Segment start is in seconds, speakerEvents timestamps are in ms
+    const segStartMs = seg.start * 1000;
+
+    // Find the most recent speaker event before or at this segment
+    let bestEvent = sorted[0];
+    for (const event of sorted) {
+      if (event.timestamp <= segStartMs + 2000) {
+        bestEvent = event;
+      } else {
+        break;
+      }
+    }
+
+    if (bestEvent && Math.abs(bestEvent.timestamp - segStartMs) < 10000) {
+      return { ...seg, speaker: bestEvent.name };
+    }
+
+    return seg;
+  });
 }
 
 // ── Transcription ──
@@ -129,67 +240,59 @@ async function transcribeGroq(audioBlob: Blob, model: string, apiKey: string): P
 // @ts-expect-error Vite worker import
 import TranscribeWorker from "./transcribeWorker?worker";
 let localWorker: Worker | null = null;
+
+/**
+ * Transcribe locally using a SINGLE Whisper pass on mono audio,
+ * then assign speakers via stereo channel energy analysis.
+ * This is ~2x faster than the old approach of running Whisper twice.
+ */
 async function transcribeLocal(audioBlob: Blob, model: string): Promise<Transcription> {
-  const { left, right } = await decodeAudio16kStereo(audioBlob);
+  const { mono, left, right, sampleRate } = await decodeAudioChannels(audioBlob);
 
   if (!localWorker) {
     localWorker = new TranscribeWorker();
   }
 
-  const runLocally = (audio: Float32Array): Promise<{ fullText: string; segments: any[] }> => {
-    return new Promise((resolve, reject) => {
-      const handler = (e: MessageEvent) => {
-        const msg = e.data;
-        if (msg.type === "done") {
-          localWorker!.removeEventListener("message", handler);
-          const { result } = msg;
+  // Single Whisper pass on mono audio
+  const result = await new Promise<{ fullText: string; segments: any[] }>((resolve, reject) => {
+    const handler = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg.type === "done") {
+        localWorker!.removeEventListener("message", handler);
+        const { result } = msg;
 
-          const fullText = (result.text || "").trim();
-          const segments = (result.chunks || []).map((c: any) => ({
-            start: c.timestamp?.[0] ?? 0,
-            end: c.timestamp?.[1] ?? ((c.timestamp?.[0] ?? 0) + 5),
-            text: (c.text || "").trim(),
-          }));
+        const fullText = (result.text || "").trim();
+        const segments = (result.chunks || []).map((c: any) => ({
+          start: c.timestamp?.[0] ?? 0,
+          end: c.timestamp?.[1] ?? ((c.timestamp?.[0] ?? 0) + 5),
+          text: (c.text || "").trim(),
+        }));
 
-          resolve({ fullText, segments });
-        } else if (msg.type === "error") {
-          localWorker!.removeEventListener("message", handler);
-          reject(new Error(msg.error));
-        }
-      };
+        resolve({ fullText, segments });
+      } else if (msg.type === "error") {
+        localWorker!.removeEventListener("message", handler);
+        reject(new Error(msg.error));
+      }
+    };
 
-      localWorker!.addEventListener("message", handler);
-      localWorker!.postMessage({ type: "transcribe", audio, model });
-    });
-  };
+    localWorker!.addEventListener("message", handler);
+    localWorker!.postMessage({ type: "transcribe", audio: mono, model });
+  });
 
-  const isSilent = (arr: Float32Array) => {
-    let sum = 0;
-    for (let i = 0; i < arr.length; i += 10) {
-      sum += arr[i]! * arr[i]!;
-    }
-    return Math.sqrt(sum / (arr.length / 10)) < 0.002;
-  };
+  let finalSegments = result.segments;
 
-  let finalSegments: any[] = [];
-
-  const leftSilent = isSilent(left);
-  if (!leftSilent) {
-    const leftResult = await runLocally(left);
-    let leftSegs = leftResult.segments.map((s) => ({ ...s, speaker: right ? "You" : undefined }));
-    finalSegments = [...finalSegments, ...leftSegs];
+  // If we have stereo data, assign speakers from channel energy
+  if (left && right) {
+    finalSegments = assignSpeakersFromChannels(
+      finalSegments,
+      left,
+      right,
+      sampleRate,
+    );
   }
-
-  if (right && !isSilent(right)) {
-    const rightResult = await runLocally(right);
-    const rightSegs = rightResult.segments.map((s) => ({ ...s, speaker: "Speaker 2" }));
-    finalSegments = [...finalSegments, ...rightSegs];
-  }
-
-  finalSegments.sort((a, b) => a.start - b.start);
 
   return {
-    fullText: finalSegments.map((s) => s.text).join(" "),
+    fullText: result.fullText,
     segments: finalSegments,
   };
 }
@@ -404,10 +507,26 @@ async function chatTogether(prompt: string, model: string, apiKey: string, maxTo
 // @ts-expect-error Vite worker import
 import ChatWorker from "./chatWorker?worker";
 let localChatWorker: Worker | null = null;
+
+// TinyLlama and small models have limited context — truncate prompt to fit
+function truncatePromptForContext(prompt: string, maxChars: number): string {
+  if (prompt.length <= maxChars) return prompt;
+  // Keep the beginning (instructions) and end (most recent context) of the prompt
+  const keepStart = Math.floor(maxChars * 0.3);
+  const keepEnd = Math.floor(maxChars * 0.7);
+  return prompt.slice(0, keepStart) + "\n\n[...transcript truncated for model context limit...]\n\n" + prompt.slice(prompt.length - keepEnd);
+}
+
 async function chatLocal(prompt: string, model: string, maxTokens: number): Promise<string> {
   if (!localChatWorker) {
     localChatWorker = new ChatWorker();
   }
+
+  // TinyLlama 1.1B has ~2048 token context. Rough estimate: 1 token ≈ 4 chars.
+  // Reserve ~1024 tokens for output, leaving ~1024 for prompt ≈ 4096 chars.
+  const isTinyLlama = model.toLowerCase().includes("tinyllama");
+  const maxPromptChars = isTinyLlama ? 4096 : 8192;
+  const safePrompt = truncatePromptForContext(prompt, maxPromptChars);
 
   return new Promise((resolve, reject) => {
     const handler = (e: MessageEvent) => {
@@ -419,13 +538,19 @@ async function chatLocal(prompt: string, model: string, maxTokens: number): Prom
         localChatWorker!.removeEventListener("message", handler);
         reject(new Error(msg.error));
       }
+      // status and progress events are intentionally ignored here;
+      // they're consumed by the UI via the preload path
     };
 
     localChatWorker!.addEventListener("message", handler);
-    // Format messages natively as HuggingFace expects for chatting
+    // Format messages as HuggingFace chat template expects
+    const systemPrompt = isTinyLlama
+      ? "You are a concise meeting assistant. Summarize the transcript into clear, structured markdown with sections: Overview, Key Points, Decisions, Action Items, Follow-ups. Be brief."
+      : "You are a helpful assistant that summarizes meeting transcripts clearly and concisely in markdown.";
+
     const messages = [
-      { role: "system", content: "You are a helpful assistant that summarizes meeting transcripts clearly and concisely in markdown." },
-      { role: "user", content: prompt }
+      { role: "system", content: systemPrompt },
+      { role: "user", content: safePrompt }
     ];
     localChatWorker!.postMessage({ type: "chat", messages, model, maxTokens });
   });

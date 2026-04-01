@@ -366,25 +366,35 @@ export function useDesktopRecorder() {
 
         const audioContext = new AudioContext()
         const destination = audioContext.createMediaStreamDestination()
-        destination.channelCount = 1
+        destination.channelCount = 2 // STEREO: Left = Mic (You), Right = System (Speaker 2)
 
         const systemSource = audioContext.createMediaStreamSource(new MediaStream([systemAudioTrack]))
         const systemAnalyser = audioContext.createAnalyser()
         systemAnalyser.fftSize = 2048
         systemSource.connect(systemAnalyser)
+
+        // Pan system audio hard RIGHT (+1) for speaker separation
+        const systemPanner = audioContext.createStereoPanner()
+        systemPanner.pan.value = 1
         const systemGain = audioContext.createGain()
         systemGain.gain.value = 0.9
         systemAnalyser.connect(systemGain)
-        systemGain.connect(destination)
+        systemGain.connect(systemPanner)
+        systemPanner.connect(destination)
 
         const micSource = audioContext.createMediaStreamSource(micStream)
         const micAnalyser = audioContext.createAnalyser()
         micAnalyser.fftSize = 2048
+
+        // Pan mic audio hard LEFT (-1) for speaker separation
+        const micPanner = audioContext.createStereoPanner()
+        micPanner.pan.value = -1
         const micGain = audioContext.createGain()
         micGain.gain.value = 1.1
         micSource.connect(micAnalyser)
         micAnalyser.connect(micGain)
-        micGain.connect(destination)
+        micGain.connect(micPanner)
+        micPanner.connect(destination)
 
         micStreamRef.current = micStream
         audioContextRef.current = audioContext

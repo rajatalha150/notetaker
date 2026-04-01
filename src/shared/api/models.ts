@@ -13,10 +13,10 @@ export const MODELS: ModelOption[] = [
   { id: "Xenova/whisper-base.en", label: "Whisper Base (Local Browser - Balanced)", provider: "local", capabilities: ["transcription"] },
   { id: "Xenova/whisper-small.en", label: "Whisper Small (Local Browser - Accurate)", provider: "local", capabilities: ["transcription"] },
 
-  // Local In-Browser (Chat / Summary)
-  { id: "Xenova/Qwen1.5-0.5B-Chat", label: "Qwen 1.5 0.5B (Local - Fast - ~350MB)", provider: "local", capabilities: ["chat"] },
-  { id: "Xenova/TinyLlama-1.1B-Chat-v1.0", label: "TinyLlama 1.1B (Local - Balanced - ~600MB)", provider: "local", capabilities: ["chat"] },
-  { id: "Xenova/Phi-3-mini-4k-instruct", label: "Phi 3 Mini (Local - Highly Accurate - ~2GB)", provider: "local", capabilities: ["chat"] },
+  // Local In-Browser (Chat / Summary) — ordered by recommendation
+  { id: "Xenova/TinyLlama-1.1B-Chat-v1.0", label: "⭐ TinyLlama 1.1B (Recommended - ~600MB)", provider: "local", capabilities: ["chat"] },
+  { id: "Xenova/Qwen1.5-0.5B-Chat", label: "Qwen 1.5 0.5B (Lightweight - ~350MB)", provider: "local", capabilities: ["chat"] },
+  { id: "Xenova/Phi-3-mini-4k-instruct", label: "Phi 3 Mini (Best Quality - ~2GB)", provider: "local", capabilities: ["chat"] },
   // OpenAI - transcription
   { id: "whisper-1", label: "Whisper", provider: "openai", capabilities: ["transcription"] },
   { id: "gpt-4o-transcribe", label: "GPT-4o Transcribe", provider: "openai", capabilities: ["transcription"] },

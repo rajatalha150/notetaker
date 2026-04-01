@@ -24,6 +24,17 @@ The heart of the project is `src/shared/`. We follow a **Shared-First** philosop
 - **`src/shared/api/`**: Contains the logic for all AI providers (OpenAI, Anthropic, etc.) and the Local WASM workers.
 - **`src/shared/storage/`**: Handles metadata persistence. The same storage API is used in both environments, while Desktop uses a `chrome-shim` for metadata/settings and Electron-managed files for the raw recording assets.
 - **`src/shared/hooks/`**: React hooks for transcription, summarization, and audio handling.
+- **`src/shared/api/`**: Includes optimized WASM workers for on-device AI.
+
+## Local AI Architecture
+
+We utilize @huggingface/transformers.js to run AI models entirely in the browser/desktop context (WASM/ONNX).
+
+- **Workers**: Transcription and Chat (Summarization) run in dedicated Web Workers (`transcribeWorker.ts`, `chatWorker.ts`) to prevent UI blocking.
+- **Hardware Optimization**: Workers automatically use multi-threading (up to 4 threads) via `navigator.hardwareConcurrency` for ~2-3x speedup on modern CPUS.
+- **Memory Management**: The `chatWorker` and `transcribeWorker` include explicit model disposal and switching. Loading a new model ID triggers the cleanup of the previous pipeline to prevent out-of-memory errors.
+- **Context Handling**: Since local models like TinyLlama have limited context windows (2048 tokens), `providers.ts` includes an intelligent prompt-truncation layer that balances transcript history and instruction preservation.
+- **Default Baseline**: TinyLlama 1.1B is the default summarization model, offering the best balance of download size (~600MB) and reasoning quality. Qwen 1.5 0.5B is provided as a lightweight alternative (~350MB).
 
 ## Audio Engineering
 

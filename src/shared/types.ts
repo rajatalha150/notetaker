@@ -89,7 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
   transcriptionProvider: "local",
   transcriptionModel: "Xenova/whisper-tiny.en",
   summarizationProvider: "local",
-  summarizationModel: "Xenova/Qwen1.5-0.5B-Chat",
+  summarizationModel: "Xenova/TinyLlama-1.1B-Chat-v1.0",
   enableCloudProviders: false,
   audioFormat: "webm",
   captureMic: true,

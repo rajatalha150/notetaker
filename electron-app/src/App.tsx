@@ -14,13 +14,18 @@ import {
   Info,
   Download,
   FileText,
-  Activity
+  Activity,
+  Minus,
+  Maximize2,
+  Minimize2,
+  X
 } from 'lucide-react'
 import { useDesktopRecorder } from './hooks/useDesktopRecorder'
 import { RecordingCard } from '../../src/sidepanel/components/RecordingCard'
 import { NotesEditor } from '../../src/sidepanel/components/NotesEditor'
 import { TranscriptionView } from '../../src/sidepanel/components/TranscriptionView'
 import { SummaryView } from '../../src/sidepanel/components/SummaryView'
+import { ExportMenu } from '../../src/sidepanel/components/ExportMenu'
 import { SettingsPage } from '../../src/sidepanel/routes/settings'
 import { getSettings } from '@shared/storage/settings'
 import { getAllRecordings, deleteRecording, getRecording, saveRecording } from '@shared/storage/metadata'
@@ -47,6 +52,7 @@ export function App() {
   const [selectedSource, setSelectedSource] = useState<string | null>(null)
   const [captureMic, setCaptureMic] = useState(true)
   const [recordings, setRecordings] = useState<RecordingMeta[]>([])
+  const [isMaximized, setIsMaximized] = useState(false)
   const [selectedRecording, setSelectedRecording] = useState<RecordingMeta | null>(null)
   const [participantHint, setParticipantHint] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -105,6 +111,12 @@ export function App() {
       refreshSources()
     }
   }, [activeTab])
+
+  useEffect(() => {
+    window.electron.windowControls.isMaximized().then(setIsMaximized)
+    const unsub = window.electron.windowControls.onMaximizedChanged(setIsMaximized)
+    return () => unsub()
+  }, [])
 
   useEffect(() => {
     if (selectedRecordingId) {
@@ -293,10 +305,10 @@ export function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-b from-gray-950 to-black">
-        {/* Header */}
+        {/* Draggable Titlebar + Window Controls */}
         <header className="flex flex-col gap-3 px-6 py-3 border-b border-gray-900 bg-black/50 backdrop-blur-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+            <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
               {selectedRecordingId && (
                 <button onClick={() => setSelectedRecordingId(null)} className="p-1 hover:bg-gray-800 rounded-lg text-gray-500 hover:text-white transition-colors">
                   <ChevronLeft size={20} />
@@ -306,10 +318,35 @@ export function App() {
                 {selectedRecordingId ? 'Recording Detail' : activeTab === 'record' ? 'Studio' : activeTab === 'history' ? 'Library' : 'Settings'}
               </h1>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${(status === 'recording' || status === 'paused') ? 'bg-red-500 animate-pulse' : 'bg-gray-700'}`}></span>
-              <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Notetaker Desktop</span>
+
+            {/* Window Controls */}
+            <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+              <button
+                onClick={() => window.electron.windowControls.minimize()}
+                className="p-2 rounded-md text-gray-500 hover:text-white hover:bg-gray-800 transition-colors"
+                title="Minimize"
+              >
+                <Minus size={14} />
+              </button>
+              <button
+                onClick={() => window.electron.windowControls.maximize()}
+                className="p-2 rounded-md text-gray-500 hover:text-white hover:bg-gray-800 transition-colors"
+                title={isMaximized ? 'Restore' : 'Maximize'}
+              >
+                {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </button>
+              <button
+                onClick={() => window.electron.windowControls.close()}
+                className="p-2 rounded-md text-gray-500 hover:text-white hover:bg-red-900/60 transition-colors"
+                title="Close"
+              >
+                <X size={14} />
+              </button>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${(status === 'recording' || status === 'paused') ? 'bg-red-500 animate-pulse' : 'bg-gray-700'}`}></span>
+            <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Notetaker Desktop</span>
           </div>
 
           <nav className="flex items-center gap-2">
@@ -492,16 +529,21 @@ export function App() {
                     disabled={isTranscribing || !selectedRecording?.filePath}
                     className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-800 disabled:text-gray-500 text-white text-xs font-bold rounded-2xl transition-all flex items-center justify-center gap-2"
                    >
-                     <FileText size={16} /> {isTranscribing ? 'Transcribing...' : transcription ? 'Transcribed' : 'Transcribe AI'}
+                     <FileText size={16} /> {isTranscribing ? 'Transcribing...' : transcription ? 'Re-transcribe' : 'Transcribe AI'}
                    </button>
                    <button 
                     onClick={() => summarize()}
                     disabled={isSummarizing || !transcription}
                     className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 disabled:text-gray-500 text-white text-xs font-bold rounded-2xl transition-all flex items-center justify-center gap-2"
                    >
-                     <Activity size={16} /> {isSummarizing ? 'Summarizing...' : summary ? 'Summarized' : 'Summarize'}
+                     <Activity size={16} /> {isSummarizing ? 'Summarizing...' : summary ? 'Re-summarize' : 'Summarize'}
                    </button>
                  </div>
+                 {selectedRecording && (transcription || summary) && (
+                   <div className="mt-4">
+                     <ExportMenu recording={selectedRecording} />
+                   </div>
+                 )}
                 </div>
 
                {previewUrl && (

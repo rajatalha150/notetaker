@@ -7,6 +7,7 @@ import { useSummary } from "@shared/hooks/useSummary";
 import { NotesEditor } from "../components/NotesEditor";
 import { TranscriptionView } from "../components/TranscriptionView";
 import { SummaryView } from "../components/SummaryView";
+import { ExportMenu } from "../components/ExportMenu";
 
 export function RecordingDetailPage() {
   const { id } = useParams({ from: "/recording/$id" });
@@ -88,35 +89,36 @@ export function RecordingDetailPage() {
         onChange={handleFileSelected}
       />
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={handleTranscribe}
-          disabled={isTranscribing || !!transcription}
+          disabled={isTranscribing}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             transcription
-              ? "bg-blue-900/20 text-blue-400 border border-blue-800/30"
+              ? "bg-blue-900/20 text-blue-400 border border-blue-800/30 hover:bg-blue-900/30"
               : isTranscribing
               ? "bg-blue-600/50 text-white"
               : "bg-blue-600 hover:bg-blue-500 text-white"
           } disabled:cursor-default`}
         >
           {isTranscribing && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-          {isTranscribing ? "Transcribing..." : transcription ? "Transcribed" : "Transcribe"}
+          {isTranscribing ? "Transcribing..." : transcription ? "Re-transcribe" : "Transcribe"}
         </button>
         <button
           onClick={() => summarize()}
-          disabled={isSummarizing || !transcription || !!summary}
+          disabled={isSummarizing || !transcription}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             summary
-              ? "bg-purple-900/20 text-purple-400 border border-purple-800/30"
+              ? "bg-purple-900/20 text-purple-400 border border-purple-800/30 hover:bg-purple-900/30"
               : isSummarizing
               ? "bg-purple-600/50 text-white"
               : "bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-40"
           } disabled:cursor-default`}
         >
           {isSummarizing && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-          {isSummarizing ? "Summarizing..." : summary ? "Summarized" : "Summarize"}
+          {isSummarizing ? "Summarizing..." : summary ? "Re-summarize" : "Summarize"}
         </button>
+        {recording && <ExportMenu recording={recording} />}
       </div>
 
       {!transcription && !isTranscribing && (

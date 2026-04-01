@@ -36,6 +36,13 @@ declare global {
         readRecording(filePath: string): Promise<ArrayBuffer>
         deleteRecording(filePath: string): Promise<{ ok: true }>
       }
+      windowControls: {
+        minimize(): Promise<void>
+        maximize(): Promise<void>
+        close(): Promise<void>
+        isMaximized(): Promise<boolean>
+        onMaximizedChanged(callback: (isMaximized: boolean) => void): () => void
+      }
       ipcRenderer: {
         send(channel: string, data: unknown): void
         on(channel: string, func: (...args: unknown[]) => void): () => void

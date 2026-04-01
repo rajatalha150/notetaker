@@ -2,12 +2,16 @@
   "name": "notetaker-desktop",
   "version": "0.1.0",
   "main": "dist-electron/main.js",
-  "description": "Desktop version of Notetaker by Peak Services Inc.",
-  "author": "Peak Services Inc.",
+  "description": "Privacy-first AI meeting recorder, transcriber, and summarizer. Record, transcribe, and summarize meetings entirely on-device.",
+  "author": "Peak Services Inc. <support@peakservices-inc.com>",
   "license": "Proprietary",
+  "homepage": "https://peakservices-inc.com",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
+    "build:deb": "tsc && vite build && electron-builder --linux deb",
+    "build:appimage": "tsc && vite build && electron-builder --linux AppImage",
+    "build:linux": "tsc && vite build && electron-builder --linux deb AppImage",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -43,8 +47,40 @@
       "dist-electron"
     ],
     "linux": {
-      "target": ["AppImage"],
-      "category": "Utility"
+      "target": ["deb", "AppImage"],
+      "category": "Utility",
+      "icon": "build/icon.png",
+      "desktop": {
+        "Name": "Notetaker",
+        "Comment": "Privacy-first AI meeting recorder, transcriber, and summarizer",
+        "Categories": "AudioVideo;Audio;Utility;",
+        "Keywords": "meeting;record;transcribe;summarize;notes;ai;",
+        "MimeType": "audio/webm;audio/ogg;",
+        "StartupWMClass": "notetaker-desktop"
+      },
+      "synopsis": "AI-powered meeting assistant that runs entirely on your device",
+      "description": "Notetaker is a privacy-first meeting assistant that silently records, transcribes, and summarizes video calls across native desktop applications. It uses on-device AI models (TinyLlama 1.1B, Whisper) so no data ever leaves your machine."
+    },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0"
+      ],
+      "recommends": [
+        "pulseaudio",
+        "pipewire"
+      ],
+      "priority": "optional",
+      "packageCategory": "sound",
+      "afterInstall": "build/after-install.sh",
+      "afterRemove": "build/after-remove.sh"
     },
     "win": {
       "target": ["portable", "nsis"]

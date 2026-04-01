@@ -42,6 +42,25 @@ const desktop = {
 
 contextBridge.exposeInMainWorld('electron', {
   desktop,
+  windowControls: {
+    minimize() {
+      return ipcRenderer.invoke('window-minimize')
+    },
+    maximize() {
+      return ipcRenderer.invoke('window-maximize')
+    },
+    close() {
+      return ipcRenderer.invoke('window-close')
+    },
+    isMaximized() {
+      return ipcRenderer.invoke('window-is-maximized') as Promise<boolean>
+    },
+    onMaximizedChanged(callback: (isMaximized: boolean) => void) {
+      const handler = (_event: any, isMaximized: boolean) => callback(isMaximized)
+      ipcRenderer.on('window-maximized-changed', handler)
+      return () => ipcRenderer.removeListener('window-maximized-changed', handler)
+    },
+  },
   ipcRenderer: {
     send(channel: string, data: any) {
       ipcRenderer.send(channel, data)

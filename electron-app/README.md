@@ -16,7 +16,8 @@ Unlike the browser extension which is limited to capturing tab audio, **Notetake
 - **Microphone Mixing**: High-performance WebAudio mixing of system audio + your local microphone.
 - **Split-Channel Recording**: Automatically panner logic (Mic on Left, System on Right) to assist in AI diarization.
 - **File-Backed Library**: Recordings are persisted as real `.webm` files in the Electron app data directory and surfaced through the shared metadata library.
-- **Direct AI Processing**: Saved desktop recordings can be reopened and transcribed directly from the desktop detail view using the shared provider pipeline.
+- **Direct AI Processing**: Saved desktop recordings can be processed using the shared provider pipeline. This includes on-device transcription (Whisper) and summarization (**TinyLlama 1.1B**) running directly in the desktop context.
+- **Hardware-Accelerated Local AI**: The desktop app leverages multi-threaded WASM workers (up to 4 CPU threads) for significantly faster on-device inference compared to single-threaded browser defaults.
 - **Deterministic Native Detection**: Before relying on manual hints, the desktop app attempts to derive platform and participant names from live native process/window metadata and UI automation first, then source/window titles, using app-specific parsing rules.
 - **Shared Metadata & Settings**: Reuses the shared metadata schema, settings UI, and AI hooks through the `chrome-shim`.
 - **Portable Distribution**: Packaged as a single `.AppImage` for Linux and `.exe` for Windows.

@@ -68,7 +68,7 @@ export function SettingsPage() {
         updates.transcriptionProvider = "local";
         updates.transcriptionModel = getTranscriptionModels("local")[0]?.id || "Xenova/whisper-tiny.en";
         updates.summarizationProvider = "local";
-        updates.summarizationModel = getChatModels("local")[0]?.id || "Xenova/Qwen1.5-0.5B-Chat";
+        updates.summarizationModel = getChatModels("local")[0]?.id || "Xenova/TinyLlama-1.1B-Chat-v1.0";
       }
       return { ...s, ...updates } as Settings;
     });
@@ -194,8 +194,8 @@ export function SettingsPage() {
               </select>
               {settings.transcriptionProvider === "local" && (
                 <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  <strong>Local mode:</strong> The AI model runs <i>entirely on your device</i>.
-                  It's 100% private and free. The first transcription will download the model (~40-80MB) automatically.
+                  <strong>🔒 Local mode:</strong> The AI model runs <i>entirely on your device</i>.
+                  It's 100% private and free. The first transcription will download the model (~40-80MB) automatically and cache it for future use.
                 </p>
               )}
             </div>
@@ -243,10 +243,21 @@ export function SettingsPage() {
                 ))}
               </select>
               {settings.summarizationProvider === "local" && (
-                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  <strong>Local mode:</strong> The AI runs <i>entirely on your device</i> privately.
-                  However, text models are large. The first run will download <strong>~350MB-2GB</strong> of data and may take several minutes to process.
-                </p>
+                <div className="mt-2 space-y-1.5">
+                  {settings.summarizationModel.includes("TinyLlama") && (
+                    <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-800/30 rounded-md px-2.5 py-1.5">
+                      <span className="text-[11px]">⭐</span>
+                      <span className="text-[11px] text-emerald-400 font-medium">Recommended — Best balance of speed, quality, and size (~600MB download)</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    <strong>🔒 Local mode:</strong> The AI runs <i>entirely on your device</i> — no data leaves your machine.
+                    {settings.summarizationModel.includes("TinyLlama")
+                      ? " TinyLlama downloads ~600MB on first use (cached for instant reuse). It handles chat, summarization, and meeting notes well within its compact size."
+                      : " The first run will download the model (~350MB-2GB) and may take several minutes to process."
+                    }
+                  </p>
+                </div>
               )}
             </div>
           )}

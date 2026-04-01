@@ -239,18 +239,20 @@ function assertManagedRecordingPath(filePath: string) {
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC || '', 'electron-vite.svg'),
-    width: 800,
-    height: 1200,
+    width: 1000,
+    height: 700,
+    minWidth: 680,
+    minHeight: 480,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
     titleBarStyle: 'hidden',
+    frame: false,
     backgroundColor: '#000000',
   })
 
-  // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
   })
@@ -261,9 +263,16 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, 'index.html'))
   }
 
-  // Handle clean destruction
   win.on('closed', () => {
     win = null
+  })
+
+  // Notify renderer when maximize state changes
+  win.on('maximize', () => {
+    win?.webContents.send('window-maximized-changed', true)
+  })
+  win.on('unmaximize', () => {
+    win?.webContents.send('window-maximized-changed', false)
   })
 }
 
@@ -352,4 +361,25 @@ ipcMain.handle('desktop-delete-recording', async (_event, payload: { filePath: s
 
 ipcMain.handle('desktop-request-mic-permission', async () => {
   return requestMicPermission()
+})
+
+// Window control IPC handlers
+ipcMain.handle('window-minimize', () => {
+  win?.minimize()
+})
+
+ipcMain.handle('window-maximize', () => {
+  if (win?.isMaximized()) {
+    win.unmaximize()
+  } else {
+    win?.maximize()
+  }
+})
+
+ipcMain.handle('window-close', () => {
+  win?.close()
+})
+
+ipcMain.handle('window-is-maximized', () => {
+  return win?.isMaximized() ?? false
 })
