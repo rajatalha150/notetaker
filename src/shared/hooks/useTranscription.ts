@@ -19,13 +19,14 @@ export function useTranscription(recordingId: string | undefined) {
 
   const transcribeMutation = useMutation({
     mutationFn: async (audio: Blob) => {
+      // Find metadata first
+      const meta = recordingId ? await getRecording(recordingId) : null;
+      const hasMic = meta ? typeof meta.userName === "string" : undefined;
+      
       // 1. Run transcription (Whisper + channel-based speaker assignment)
-      const result = await transcribe(audio);
+      const result = await transcribe(audio, hasMic);
 
-      if (!recordingId) return result;
-
-      const meta = await getRecording(recordingId);
-      if (!meta) return result;
+      if (!recordingId || !meta) return result;
 
       let segments: TranscriptionSegment[] = result.segments;
 

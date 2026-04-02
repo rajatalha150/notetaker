@@ -246,7 +246,7 @@ let localWorker: Worker | null = null;
  * then assign speakers via stereo channel energy analysis.
  * This is ~2x faster than the old approach of running Whisper twice.
  */
-async function transcribeLocal(audioBlob: Blob, model: string): Promise<Transcription> {
+async function transcribeLocal(audioBlob: Blob, model: string, hasMic?: boolean): Promise<Transcription> {
   const { mono, left, right, sampleRate } = await decodeAudioChannels(audioBlob);
 
   if (!localWorker) {
@@ -281,8 +281,8 @@ async function transcribeLocal(audioBlob: Blob, model: string): Promise<Transcri
 
   let finalSegments = result.segments;
 
-  // If we have stereo data, assign speakers from channel energy
-  if (left && right) {
+  // If we have stereo data AND we know a microphone was captured, assign speakers from channel energy
+  if (left && right && hasMic) {
     finalSegments = assignSpeakersFromChannels(
       finalSegments,
       left,
@@ -372,7 +372,7 @@ async function transcribeGemini(audioBlob: Blob, model: string, apiKey: string):
   };
 }
 
-export async function transcribe(audioBlob: Blob): Promise<Transcription> {
+export async function transcribe(audioBlob: Blob, hasMic?: boolean): Promise<Transcription> {
   const settings = await getSettings();
   const provider = settings.transcriptionProvider;
   const model = settings.transcriptionModel;
@@ -382,7 +382,7 @@ export async function transcribe(audioBlob: Blob): Promise<Transcription> {
 
   switch (provider) {
     case "local":
-      return transcribeLocal(audioBlob, model);
+      return transcribeLocal(audioBlob, model, hasMic);
     case "openai":
       return transcribeOpenAI(audioBlob, model, apiKey!);
     case "groq":

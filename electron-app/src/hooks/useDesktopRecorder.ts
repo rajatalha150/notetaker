@@ -400,6 +400,26 @@ export function useDesktopRecorder() {
         audioContextRef.current = audioContext
         finalStream = destination.stream
 
+        // Software AEC / Sidechain Ducking
+        // Uses high-speed polling mapped to hardware-interpolated Web Audio setters
+        // to mute the microphone precisely when system audio is actively playing, preventing
+        // the microphone from recording room speaker echo.
+        let duckingFrameId: number
+        const autoDuck = () => {
+          if (micGain && systemAnalyser && audioContext.state === 'running') {
+            const sysLevel = getAnalyserLevel(systemAnalyser)
+            if (sysLevel > 0.025) {
+              // System audio is loud (speakers active) → Duck mic rapidly
+              micGain.gain.setTargetAtTime(0.05, audioContext.currentTime, 0.05)
+            } else {
+              // System audio quiet → Release mic slowly
+              micGain.gain.setTargetAtTime(1.1, audioContext.currentTime, 0.3)
+            }
+            duckingFrameId = requestAnimationFrame(autoDuck)
+          }
+        }
+        autoDuck()
+
         let smoothedMicLevel = 0
         let smoothedSystemLevel = 0
         let confirmedSpeaker: string | null = null
