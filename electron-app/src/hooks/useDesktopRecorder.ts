@@ -390,7 +390,7 @@ export function useDesktopRecorder() {
         const micPanner = audioContext.createStereoPanner()
         micPanner.pan.value = -1
         const micGain = audioContext.createGain()
-        micGain.gain.value = 1.1
+        micGain.gain.value = 2.5 // Boosted gain because downmixing cuts it by 50% and local whisper needs clarity
         micSource.connect(micAnalyser)
         micAnalyser.connect(micGain)
         micGain.connect(micPanner)
@@ -408,17 +408,17 @@ export function useDesktopRecorder() {
         const autoDuck = () => {
           if (micGain && systemAnalyser && audioContext.state === 'running') {
             const sysLevel = getAnalyserLevel(systemAnalyser)
-            if (sysLevel > 0.025) {
+            if (sysLevel > 0.05) { // increased threshold to prevent false-triggering on basic system noise
               // System audio is loud (speakers active) → Duck mic rapidly
-              micGain.gain.setTargetAtTime(0.05, audioContext.currentTime, 0.05)
+              micGain.gain.setTargetAtTime(0.1, audioContext.currentTime, 0.05)
             } else {
               // System audio quiet → Release mic slowly
-              micGain.gain.setTargetAtTime(1.1, audioContext.currentTime, 0.3)
+              micGain.gain.setTargetAtTime(2.5, audioContext.currentTime, 0.3)
             }
             duckingFrameId = requestAnimationFrame(autoDuck)
           }
         }
-        autoDuck()
+        // autoDuck() // DISABLED FOR NOW to prevent accidental permanent mic muting
 
         let smoothedMicLevel = 0
         let smoothedSystemLevel = 0
