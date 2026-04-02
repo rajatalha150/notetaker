@@ -358,9 +358,9 @@ export function useDesktopRecorder() {
       if (captureMic) {
         const micStream = await navigator.mediaDevices.getUserMedia({
           audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
           },
         })
 
