@@ -49,7 +49,7 @@
     "linux": {
       "target": ["deb", "AppImage"],
       "category": "Utility",
-      "icon": "build/icon.png",
+      "icon": "build/icons",
       "desktop": {
         "Name": "Notetaker",
         "Comment": "Privacy-first AI meeting recorder, transcriber, and summarizer",
