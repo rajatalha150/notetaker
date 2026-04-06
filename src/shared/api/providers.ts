@@ -526,18 +526,18 @@ function getLocalModelProfile(model: string): {
     "Sections: Overview, Key Discussion Points, Decisions Made, Action Items, Follow-ups.";
 
   if (m.includes("360m") || m.includes("135m")) {
-    return { maxPromptChars: 1000, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 60_000 };
+    return { maxPromptChars: 1000, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 195_000 };
   }
   if (m.includes("0.5b") || m.includes("0_5b")) {
-    return { maxPromptChars: 2000, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 75_000 };
+    return { maxPromptChars: 2000, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 255_000 };
   }
   if (m.includes("tinyllama") || m.includes("1.1b") || m.includes("1_1b")) {
-    return { maxPromptChars: 2800, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 105_000 };
+    return { maxPromptChars: 2800, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 315_000 };
   }
   if (m.includes("1.7b") || m.includes("1_7b")) {
-    return { maxPromptChars: 3800, systemPrompt: FULL_SYSTEM, clientTimeoutMs: 135_000 };
+    return { maxPromptChars: 3800, systemPrompt: FULL_SYSTEM, clientTimeoutMs: 435_000 };
   }
-  return { maxPromptChars: 2800, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 105_000 };
+  return { maxPromptChars: 2800, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 315_000 };
 }
 
 function truncatePromptForContext(prompt: string, maxChars: number): string {

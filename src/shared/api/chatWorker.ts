@@ -50,19 +50,19 @@ function getModelProfile(model: string): {
 } {
     const m = model.toLowerCase();
     if (m.includes("360m") || m.includes("135m")) {
-        return { maxPromptChars: 1200, maxNewTokens: 256, timeoutMs: 45_000 };
+        return { maxPromptChars: 1200, maxNewTokens: 256, timeoutMs: 180_000 }; // 3 min
     }
     if (m.includes("0.5b") || m.includes("0_5b")) {
-        return { maxPromptChars: 2400, maxNewTokens: 384, timeoutMs: 60_000 };
+        return { maxPromptChars: 2400, maxNewTokens: 384, timeoutMs: 240_000 }; // 4 min
     }
     if (m.includes("tinyllama") || m.includes("1.1b") || m.includes("1_1b")) {
-        return { maxPromptChars: 3000, maxNewTokens: 512, timeoutMs: 90_000 };
+        return { maxPromptChars: 3000, maxNewTokens: 512, timeoutMs: 300_000 }; // 5 min
     }
     if (m.includes("1.7b") || m.includes("1_7b")) {
-        return { maxPromptChars: 4000, maxNewTokens: 768, timeoutMs: 120_000 };
+        return { maxPromptChars: 4000, maxNewTokens: 768, timeoutMs: 420_000 }; // 7 min
     }
     // Fallback for unknown models
-    return { maxPromptChars: 3000, maxNewTokens: 512, timeoutMs: 90_000 };
+    return { maxPromptChars: 3000, maxNewTokens: 512, timeoutMs: 300_000 };
 }
 
 class PipelineSingleton {
@@ -132,12 +132,9 @@ self.addEventListener("message", async (e: MessageEvent) => {
             const result = await Promise.race([
                 generator(messages, {
                     max_new_tokens: maxNewTokens,
-                    // Sampling with low temperature prevents greedy repetition loops
-                    do_sample: true,
-                    temperature: 0.2,
-                    top_p: 0.9,
-                    // Penalise repeating the same tokens — key fix for "runs forever"
-                    repetition_penalty: 1.3,
+                    // Greedy search (fastest) but explicitly penalize repeated phrases to break loops
+                    do_sample: false,
+                    repetition_penalty: 1.15,
                     return_full_text: false,
                 }),
                 new Promise<never>((_, reject) => {
