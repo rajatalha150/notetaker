@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, systemPreferences } from 'electron'
+import { app, BrowserWindow, ipcMain, desktopCapturer, systemPreferences, session } from 'electron'
 import { execFile } from 'node:child_process'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -290,6 +290,18 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(async () => {
+  // Enable Cross-Origin Isolation so SharedArrayBuffer is available in the renderer.
+  // Without this, ONNX WASM multi-threading aborts with "Aborted()".
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Cross-Origin-Opener-Policy': ['same-origin'],
+        'Cross-Origin-Embedder-Policy': ['require-corp'],
+      },
+    })
+  })
+
   await ensureRecordingsDir()
   createWindow()
 })

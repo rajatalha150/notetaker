@@ -5,18 +5,88 @@ export interface ModelOption {
   label: string;
   provider: Provider;
   capabilities: ("transcription" | "chat")[];
+  /** Approximate download size in MB (local models only) */
+  sizeMB?: number;
+  /** Short description shown in the settings UI */
+  description?: string;
+  /** Whether this is the recommended default */
+  isRecommended?: boolean;
+  /** Grouping tier for local chat models: 'ultra-light' | 'standard' */
+  tier?: "ultra-light" | "standard";
 }
 
 export const MODELS: ModelOption[] = [
-  // Local In-Browser (Transcription)
-  { id: "Xenova/whisper-tiny.en", label: "Whisper Tiny (Local Browser - Very Fast)", provider: "local", capabilities: ["transcription"] },
-  { id: "Xenova/whisper-base.en", label: "Whisper Base (Local Browser - Balanced)", provider: "local", capabilities: ["transcription"] },
-  { id: "Xenova/whisper-small.en", label: "Whisper Small (Local Browser - Accurate)", provider: "local", capabilities: ["transcription"] },
+  // Local In-Browser (Transcription) — multilingual Whisper via onnx-community
+  {
+    id: "onnx-community/whisper-tiny",
+    label: "Whisper Tiny",
+    provider: "local",
+    capabilities: ["transcription"],
+    sizeMB: 39,
+    description: "Very fast, decent accuracy. Multilingual. Best for quick previews.",
+    isRecommended: true,
+  },
+  {
+    id: "onnx-community/whisper-base",
+    label: "Whisper Base",
+    provider: "local",
+    capabilities: ["transcription"],
+    sizeMB: 100,
+    description: "Better accuracy than Tiny. Still browser-friendly. Good balance.",
+  },
+  {
+    id: "onnx-community/whisper-small",
+    label: "Whisper Small",
+    provider: "local",
+    capabilities: ["transcription"],
+    sizeMB: 460,
+    description: "Best quality under 500MB. Ideal for important recordings.",
+  },
 
-  // Local In-Browser (Chat / Summary) — ordered by recommendation
-  { id: "Xenova/TinyLlama-1.1B-Chat-v1.0", label: "⭐ TinyLlama 1.1B (Recommended - ~600MB)", provider: "local", capabilities: ["chat"] },
-  { id: "Xenova/Qwen1.5-0.5B-Chat", label: "Qwen 1.5 0.5B (Lightweight - ~350MB)", provider: "local", capabilities: ["chat"] },
-  { id: "Xenova/Phi-3-mini-4k-instruct", label: "Phi 3 Mini (Best Quality - ~2GB)", provider: "local", capabilities: ["chat"] },
+  // ── Local In-Browser (Chat / Summary) ──────────────────────────────────
+  // Ultra-light tier: fastest, trades quality for speed
+  {
+    // SmolLM2-360M: ~180MB Q4, Apache 2.0. Fastest option.
+    id: "HuggingFaceTB/SmolLM2-360M-Instruct",
+    label: "SmolLM2 360M",
+    provider: "local",
+    capabilities: ["chat"],
+    sizeMB: 180,
+    description: "Fastest local model. Lower quality, but instant on most hardware. Best for quick notes.",
+    tier: "ultra-light",
+  },
+  {
+    // Qwen2.5-0.5B: best tiny LLM for browser. Recommended for ultra-light tier.
+    id: "onnx-community/Qwen2.5-0.5B-Instruct",
+    label: "Qwen 2.5 0.5B",
+    provider: "local",
+    capabilities: ["chat"],
+    sizeMB: 350,
+    description: "Best tiny LLM for browser use. Great reasoning per MB. Go-to for constrained devices.",
+    isRecommended: true,
+    tier: "ultra-light",
+  },
+  // Standard tier: quality-focused (400–500MB)
+  {
+    // SmolLM2-1.7B: Apache 2.0, open access
+    id: "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+    label: "SmolLM2 1.7B",
+    provider: "local",
+    capabilities: ["chat"],
+    sizeMB: 450,
+    description: "Better summarization quality. Needs more RAM but noticeably smarter output.",
+    tier: "standard",
+  },
+  {
+    // Note: use Xenova namespace — onnx-community/TinyLlama is gated
+    id: "Xenova/TinyLlama-1.1B-Chat-v1.0",
+    label: "TinyLlama 1.1B",
+    provider: "local",
+    capabilities: ["chat"],
+    sizeMB: 400,
+    description: "Stable and battle-tested. Slightly weaker reasoning than Qwen but proven in browser.",
+    tier: "standard",
+  },
   // OpenAI - transcription
   { id: "whisper-1", label: "Whisper", provider: "openai", capabilities: ["transcription"] },
   { id: "gpt-4o-transcribe", label: "GPT-4o Transcribe", provider: "openai", capabilities: ["transcription"] },

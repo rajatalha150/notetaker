@@ -25,13 +25,16 @@ const PROVIDER_PLACEHOLDERS: Record<Provider, string> = {
 };
 
 const API_PROVIDERS: { id: Provider; label: string; link: string; summary: string; caps: string }[] = [
-  { id: "openai", label: "OpenAI", link: "https://platform.openai.com/api-keys", summary: "Industry standard models.", caps: "✅ Transcription & Summary" },
-  { id: "anthropic", label: "Anthropic", link: "https://console.anthropic.com/settings/keys", summary: "Excellent reasoning and writing.", caps: "✅ Summary Only" },
-  { id: "gemini", label: "Google Gemini", link: "https://aistudio.google.com/app/apikey", summary: "Google's fast multimodal models.", caps: "✅ Transcription & Summary" },
-  { id: "groq", label: "Groq", link: "https://console.groq.com/keys", summary: "Ultra-fast inference via LPU.", caps: "✅ Transcription & Summary" },
-  { id: "together", label: "Together AI", link: "https://api.together.ai/settings/api-keys", summary: "Open Source Llama & DeepSeek.", caps: "✅ Summary Only" },
-  { id: "deepgram", label: "Deepgram", link: "https://console.deepgram.com/", summary: "Lightning-fast voice API.", caps: "✅ Transcription Only" },
+  { id: "openai", label: "OpenAI", link: "https://platform.openai.com/api-keys", summary: "Industry standard models.", caps: "Transcription & Summary" },
+  { id: "anthropic", label: "Anthropic", link: "https://console.anthropic.com/settings/keys", summary: "Excellent reasoning and writing.", caps: "Summary only" },
+  { id: "gemini", label: "Google Gemini", link: "https://aistudio.google.com/app/apikey", summary: "Google's fast multimodal models.", caps: "Transcription & Summary" },
+  { id: "groq", label: "Groq", link: "https://console.groq.com/keys", summary: "Ultra-fast inference via LPU.", caps: "Transcription & Summary" },
+  { id: "together", label: "Together AI", link: "https://api.together.ai/settings/api-keys", summary: "Open Source Llama & DeepSeek.", caps: "Summary only" },
+  { id: "deepgram", label: "Deepgram", link: "https://console.deepgram.com/", summary: "Lightning-fast voice API.", caps: "Transcription only" },
 ];
+
+const selectClass =
+  "w-full px-3 py-2 bg-gray-800 border border-gray-700/50 rounded-md text-sm focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500/20 transition-colors text-gray-300";
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -66,9 +69,9 @@ export function SettingsPage() {
       const updates: Partial<Settings> = { enableCloudProviders: enabled };
       if (!enabled) {
         updates.transcriptionProvider = "local";
-        updates.transcriptionModel = getTranscriptionModels("local")[0]?.id || "Xenova/whisper-tiny.en";
+        updates.transcriptionModel = getTranscriptionModels("local")[0]?.id || "onnx-community/whisper-tiny";
         updates.summarizationProvider = "local";
-        updates.summarizationModel = getChatModels("local")[0]?.id || "Xenova/TinyLlama-1.1B-Chat-v1.0";
+        updates.summarizationModel = getChatModels("local")[0]?.id || "onnx-community/Qwen2.5-0.5B-Instruct";
       }
       return { ...s, ...updates } as Settings;
     });
@@ -76,26 +79,126 @@ export function SettingsPage() {
 
   const configuredProviders = settings.enableCloudProviders
     ? API_PROVIDERS.filter(
-      (p) => settings.providers[p.id] && settings.providersEnabled?.[p.id as keyof typeof settings.providersEnabled] !== false
-    ).map((p) => p.id)
+        (p) =>
+          settings.providers[p.id] &&
+          settings.providersEnabled?.[p.id as keyof typeof settings.providersEnabled] !== false
+      ).map((p) => p.id)
     : [];
 
-  const transcriptionProviders = getProvidersWithCapability("transcription").filter((p) => configuredProviders.includes(p) || p === "local");
-  const summarizationProviders = getProvidersWithCapability("chat").filter((p) => configuredProviders.includes(p) || p === "local");
+  const transcriptionProviders = getProvidersWithCapability("transcription").filter(
+    (p) => configuredProviders.includes(p) || p === "local"
+  );
+  const summarizationProviders = getProvidersWithCapability("chat").filter(
+    (p) => configuredProviders.includes(p) || p === "local"
+  );
 
   const transcriptionModels = getTranscriptionModels(settings.transcriptionProvider);
   const summarizationModels = getChatModels(settings.summarizationProvider);
 
-  const selectClass =
-    "w-full px-3 py-2 bg-gray-800 border border-gray-700/50 rounded-md text-sm focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500/20 transition-colors text-gray-300";
-
   return (
     <div className="max-w-md space-y-6 animate-fade-in">
+
+      {/* ── Local AI Models ── */}
+      <section>
+        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+          Local AI Models
+        </h3>
+        <p className="text-[11px] text-gray-500 mb-3">
+          Runs 100% on your device — private &amp; free. Model files are downloaded once and cached automatically the first time you transcribe or summarize.
+        </p>
+
+        <div className="space-y-3 bg-gray-900/50 rounded-lg p-4 border border-gray-800/50">
+          {/* Transcription model */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-1.5">Transcription model</label>
+            <select
+              value={settings.transcriptionProvider === "local" ? settings.transcriptionModel : ""}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  transcriptionProvider: "local",
+                  transcriptionModel: e.target.value,
+                }))
+              }
+              className={selectClass}
+            >
+              {getTranscriptionModels("local").map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                  {m.sizeMB ? ` — ~${m.sizeMB} MB` : ""}
+                  {m.isRecommended ? " ⭐" : ""}
+                </option>
+              ))}
+            </select>
+            {/* Description of selected model */}
+            {(() => {
+              const m = getTranscriptionModels("local").find(
+                (x) => x.id === settings.transcriptionModel
+              );
+              return m?.description ? (
+                <p className="text-[11px] text-gray-500 mt-1.5 leading-snug">{m.description}</p>
+              ) : null;
+            })()}
+          </div>
+
+          {/* Summarization model */}
+          <div className="pt-3 border-t border-gray-800/60">
+            <label className="block text-sm text-gray-300 mb-1.5">Summarization model</label>
+            <select
+              value={settings.summarizationProvider === "local" ? settings.summarizationModel : ""}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  summarizationProvider: "local",
+                  summarizationModel: e.target.value,
+                }))
+              }
+              className={selectClass}
+            >
+              <optgroup label="⚡ Ultra-light (fast, smaller)">
+                {getChatModels("local")
+                  .filter((m) => m.tier === "ultra-light")
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                      {m.sizeMB ? ` — ~${m.sizeMB} MB` : ""}
+                      {m.isRecommended ? " ⭐" : ""}
+                    </option>
+                  ))}
+              </optgroup>
+              <optgroup label="🧠 Standard (better quality)">
+                {getChatModels("local")
+                  .filter((m) => m.tier === "standard")
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                      {m.sizeMB ? ` — ~${m.sizeMB} MB` : ""}
+                    </option>
+                  ))}
+              </optgroup>
+            </select>
+            {(() => {
+              const m = getChatModels("local").find(
+                (x) => x.id === settings.summarizationModel
+              );
+              return m?.description ? (
+                <p className="text-[11px] text-gray-500 mt-1.5 leading-snug">{m.description}</p>
+              ) : null;
+            })()}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Cloud API Providers ── */}
       <section>
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Cloud API Providers</h3>
-            <p className="text-[11px] text-gray-500 mt-1">Configure external API keys for cloud transcription & summaries.</p>
+            <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              Cloud API Providers
+            </h3>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Optional — use cloud models instead of local AI.
+            </p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer ml-4">
             <input
@@ -119,7 +222,9 @@ export function SettingsPage() {
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={settings.providersEnabled?.[p.id as keyof typeof settings.providersEnabled] !== false}
+                        checked={
+                          settings.providersEnabled?.[p.id as keyof typeof settings.providersEnabled] !== false
+                        }
                         onChange={(e) => updateProviderEnabled(p.id, e.target.checked)}
                         className="sr-only peer"
                       />
@@ -133,12 +238,14 @@ export function SettingsPage() {
                     rel="noreferrer"
                     className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors bg-blue-500/10 px-2 py-0.5 rounded-full"
                   >
-                    Get API Key &rarr;
+                    Get key →
                   </a>
                 </div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[11px] text-gray-400 flex-1">{p.summary}</p>
-                  <span className="text-[10px] items-center text-gray-500 font-medium bg-gray-800 px-1.5 py-0.5 rounded ml-2">{p.caps}</span>
+                  <span className="text-[10px] text-gray-500 font-medium bg-gray-800 px-1.5 py-0.5 rounded ml-2">
+                    {p.caps}
+                  </span>
                 </div>
                 <input
                   type="password"
@@ -151,16 +258,14 @@ export function SettingsPage() {
             ))}
           </div>
         )}
-      </section>
 
-      <section>
-        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Active Transcription AI</h3>
-        <div className="space-y-3 bg-gray-900/50 rounded-lg p-4 border border-gray-800/50">
-          <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Transcription Provider</label>
-            {transcriptionProviders.length === 0 ? (
-              <p className="text-xs text-yellow-500">Provide an API key to enable cloud transcription.</p>
-            ) : (
+        {/* Active cloud model overrides — only shown when cloud is enabled and providers are configured */}
+        {settings.enableCloudProviders && configuredProviders.length > 0 && (
+          <div className="mt-3 space-y-3 bg-gray-900/50 rounded-lg p-4 border border-gray-800/50">
+            <p className="text-[11px] text-gray-400 font-medium">Active cloud models</p>
+
+            <div>
+              <label className="block text-sm text-gray-300 mb-1.5">Transcription</label>
               <select
                 value={settings.transcriptionProvider}
                 onChange={(e) => {
@@ -175,42 +280,28 @@ export function SettingsPage() {
                 className={selectClass}
               >
                 {transcriptionProviders.map((p) => (
-                  <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
+                  <option key={p} value={p}>
+                    {PROVIDER_LABELS[p]}
+                  </option>
                 ))}
               </select>
-            )}
-          </div>
-          {transcriptionProviders.length > 0 && (
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Model</label>
-              <select
-                value={settings.transcriptionModel}
-                onChange={(e) => setSettings((s) => ({ ...s, transcriptionModel: e.target.value }))}
-                className={selectClass}
-              >
-                {transcriptionModels.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
-              </select>
-              {settings.transcriptionProvider === "local" && (
-                <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                  <strong>🔒 Local mode:</strong> The AI model runs <i>entirely on your device</i>.
-                  It's 100% private and free. The first transcription will download the model (~40-80MB) automatically and cache it for future use.
-                </p>
+              {transcriptionModels.length > 1 && (
+                <select
+                  value={settings.transcriptionModel}
+                  onChange={(e) => setSettings((s) => ({ ...s, transcriptionModel: e.target.value }))}
+                  className={`${selectClass} mt-1.5`}
+                >
+                  {transcriptionModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
               )}
             </div>
-          )}
-        </div>
-      </section>
 
-      <section>
-        <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Active Summarization AI</h3>
-        <div className="space-y-3 bg-gray-900/50 rounded-lg p-4 border border-gray-800/50">
-          <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Summarization Provider</label>
-            {summarizationProviders.length === 0 ? (
-              <p className="text-xs text-yellow-500">Provide an API key above to enable meeting summaries. (Local summarization is available)</p>
-            ) : (
+            <div>
+              <label className="block text-sm text-gray-300 mb-1.5">Summarization</label>
               <select
                 value={settings.summarizationProvider}
                 onChange={(e) => {
@@ -225,46 +316,32 @@ export function SettingsPage() {
                 className={selectClass}
               >
                 {summarizationProviders.map((p) => (
-                  <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
+                  <option key={p} value={p}>
+                    {PROVIDER_LABELS[p]}
+                  </option>
                 ))}
               </select>
-            )}
-          </div>
-          {summarizationProviders.length > 0 && (
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Model</label>
-              <select
-                value={settings.summarizationModel}
-                onChange={(e) => setSettings((s) => ({ ...s, summarizationModel: e.target.value }))}
-                className={selectClass}
-              >
-                {summarizationModels.map((m) => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
-              </select>
-              {settings.summarizationProvider === "local" && (
-                <div className="mt-2 space-y-1.5">
-                  {settings.summarizationModel.includes("TinyLlama") && (
-                    <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-800/30 rounded-md px-2.5 py-1.5">
-                      <span className="text-[11px]">⭐</span>
-                      <span className="text-[11px] text-emerald-400 font-medium">Recommended — Best balance of speed, quality, and size (~600MB download)</span>
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 leading-relaxed">
-                    <strong>🔒 Local mode:</strong> The AI runs <i>entirely on your device</i> — no data leaves your machine.
-                    {settings.summarizationModel.includes("TinyLlama")
-                      ? " TinyLlama downloads ~600MB on first use (cached for instant reuse). It handles chat, summarization, and meeting notes well within its compact size."
-                      : " The first run will download the model (~350MB-2GB) and may take several minutes to process."
-                    }
-                  </p>
-                </div>
+              {summarizationModels.length > 1 && (
+                <select
+                  value={settings.summarizationModel}
+                  onChange={(e) =>
+                    setSettings((s) => ({ ...s, summarizationModel: e.target.value }))
+                  }
+                  className={`${selectClass} mt-1.5`}
+                >
+                  {summarizationModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </section>
 
-      {/* Recording Section */}
+      {/* ── Recording ── */}
       <section>
         <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Recording</h3>
         <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-800/50">
@@ -289,10 +366,11 @@ export function SettingsPage() {
 
       <button
         onClick={handleSave}
-        className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all ${saved
-          ? "bg-green-600/20 text-green-400 border border-green-800/50"
-          : "bg-blue-600 hover:bg-blue-500 text-white"
-          }`}
+        className={`w-full py-2.5 rounded-lg text-sm font-medium transition-all ${
+          saved
+            ? "bg-green-600/20 text-green-400 border border-green-800/50"
+            : "bg-blue-600 hover:bg-blue-500 text-white"
+        }`}
       >
         {saved ? "Saved!" : "Save Settings"}
       </button>

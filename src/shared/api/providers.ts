@@ -508,51 +508,98 @@ async function chatTogether(prompt: string, model: string, apiKey: string, maxTo
 import ChatWorker from "./chatWorker?worker";
 let localChatWorker: Worker | null = null;
 
-// TinyLlama and small models have limited context — truncate prompt to fit
-function truncatePromptForContext(prompt: string, maxChars: number): string {
-  if (prompt.length <= maxChars) return prompt;
-  // Keep the beginning (instructions) and end (most recent context) of the prompt
-  const keepStart = Math.floor(maxChars * 0.3);
-  const keepEnd = Math.floor(maxChars * 0.7);
-  return prompt.slice(0, keepStart) + "\n\n[...transcript truncated for model context limit...]\n\n" + prompt.slice(prompt.length - keepEnd);
+// Mirror the profile table from chatWorker so prompts are pre-trimmed before sending.
+// This prevents overflowing the model's context window before inference even starts.
+function getLocalModelProfile(model: string): {
+  maxPromptChars: number;
+  systemPrompt: string;
+  clientTimeoutMs: number; // slightly longer than worker timeout to catch extreme hangs
+} {
+  const m = model.toLowerCase();
+
+  const BRIEF_SYSTEM =
+    "You are a concise meeting assistant. Write a brief structured summary in markdown. " +
+    "Sections: Overview, Key Points, Action Items. Keep each section short.";
+
+  const FULL_SYSTEM =
+    "You are a meeting assistant. Summarize the transcript in clear structured markdown. " +
+    "Sections: Overview, Key Discussion Points, Decisions Made, Action Items, Follow-ups.";
+
+  if (m.includes("360m") || m.includes("135m")) {
+    return { maxPromptChars: 1000, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 60_000 };
+  }
+  if (m.includes("0.5b") || m.includes("0_5b")) {
+    return { maxPromptChars: 2000, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 75_000 };
+  }
+  if (m.includes("tinyllama") || m.includes("1.1b") || m.includes("1_1b")) {
+    return { maxPromptChars: 2800, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 105_000 };
+  }
+  if (m.includes("1.7b") || m.includes("1_7b")) {
+    return { maxPromptChars: 3800, systemPrompt: FULL_SYSTEM, clientTimeoutMs: 135_000 };
+  }
+  return { maxPromptChars: 2800, systemPrompt: BRIEF_SYSTEM, clientTimeoutMs: 105_000 };
 }
 
-async function chatLocal(prompt: string, model: string, maxTokens: number): Promise<string> {
+function truncatePromptForContext(prompt: string, maxChars: number): string {
+  if (prompt.length <= maxChars) return prompt;
+  // Keep the start (instructions) and end (most recent context — most relevant)
+  const keepStart = Math.floor(maxChars * 0.25);
+  const keepEnd = Math.floor(maxChars * 0.75);
+  return (
+    prompt.slice(0, keepStart) +
+    "\n\n[...transcript truncated to fit model context...]\n\n" +
+    prompt.slice(prompt.length - keepEnd)
+  );
+}
+
+async function chatLocal(prompt: string, model: string): Promise<string> {
   if (!localChatWorker) {
     localChatWorker = new ChatWorker();
   }
 
-  // TinyLlama 1.1B has ~2048 token context. Rough estimate: 1 token ≈ 4 chars.
-  // Reserve ~1024 tokens for output, leaving ~1024 for prompt ≈ 4096 chars.
-  const isTinyLlama = model.toLowerCase().includes("tinyllama");
-  const maxPromptChars = isTinyLlama ? 4096 : 8192;
+  const { maxPromptChars, systemPrompt, clientTimeoutMs } = getLocalModelProfile(model);
   const safePrompt = truncatePromptForContext(prompt, maxPromptChars);
 
   return new Promise((resolve, reject) => {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      localChatWorker!.removeEventListener("message", handler);
+      if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+    };
+
     const handler = (e: MessageEvent) => {
       const msg = e.data;
       if (msg.type === "done") {
-        localChatWorker!.removeEventListener("message", handler);
-        resolve(msg.result);
+        cleanup();
+        if (!msg.result || !msg.result.trim()) {
+          reject(new Error("Model returned an empty response. Try a different model."));
+        } else {
+          resolve(msg.result);
+        }
       } else if (msg.type === "error") {
-        localChatWorker!.removeEventListener("message", handler);
-        reject(new Error(msg.error));
+        cleanup();
+        reject(new Error(msg.error || "Local AI error"));
       }
-      // status and progress events are intentionally ignored here;
-      // they're consumed by the UI via the preload path
+      // status/progress/device events are informational — ignored here
     };
 
     localChatWorker!.addEventListener("message", handler);
-    // Format messages as HuggingFace chat template expects
-    const systemPrompt = isTinyLlama
-      ? "You are a concise meeting assistant. Summarize the transcript into clear, structured markdown with sections: Overview, Key Points, Decisions, Action Items, Follow-ups. Be brief."
-      : "You are a helpful assistant that summarizes meeting transcripts clearly and concisely in markdown.";
+
+    // Client-side safety timeout (worker also has its own — this catches extreme hangs)
+    timeoutHandle = setTimeout(() => {
+      cleanup();
+      reject(new Error(
+        `Summarization timed out after ${Math.round(clientTimeoutMs / 1000)}s. ` +
+        "Try a smaller model (e.g. SmolLM2 360M) or a shorter recording."
+      ));
+    }, clientTimeoutMs);
 
     const messages = [
       { role: "system", content: systemPrompt },
-      { role: "user", content: safePrompt }
+      { role: "user", content: safePrompt },
     ];
-    localChatWorker!.postMessage({ type: "chat", messages, model, maxTokens });
+    localChatWorker!.postMessage({ type: "chat", messages, model });
   });
 }
 
@@ -566,7 +613,7 @@ async function chatCompletion(prompt: string, maxTokens = 2048): Promise<string>
 
   switch (provider) {
     case "local":
-      return chatLocal(prompt, model, maxTokens);
+      return chatLocal(prompt, model);
     case "openai":
       return chatOpenAI(prompt, model, apiKey!, maxTokens);
     case "anthropic":
