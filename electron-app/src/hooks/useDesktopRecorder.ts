@@ -326,6 +326,7 @@ export function useDesktopRecorder() {
     const initialSourceContext = buildSourceContext(sourceName, initialSourceMetadata)
     const resolvedSourceName = initialSourceContext.sourceName || sourceName
     recordingIdRef.current = id
+    (window as any).__setActiveDesktopRecordingId?.(id)
     startedAtRef.current = startedAt
     sourceRef.current = { id: sourceId, name: resolvedSourceName }
 
@@ -598,6 +599,7 @@ export function useDesktopRecorder() {
         } finally {
           await cleanupMedia()
           setStatus('stopped')
+          (window as any).__setActiveDesktopRecordingId?.(null)
           syncElapsedTime()
         }
       }
@@ -620,6 +622,7 @@ export function useDesktopRecorder() {
         sourceWindowClass: initialSourceContext.windowClass,
         sourceProcessName: initialSourceContext.processName,
         mimeType: mimeTypeRef.current,
+        captureMic,
         userName: captureMic ? 'You' : undefined,
       }
 
@@ -642,6 +645,7 @@ export function useDesktopRecorder() {
       return id
     } catch (error) {
       await cleanupMedia()
+      (window as any).__setActiveDesktopRecordingId?.(null)
       recordingIdRef.current = null
       startedAtRef.current = null
       sourceRef.current = null

@@ -10,9 +10,17 @@ if (!safeEnv.backends) safeEnv.backends = {};
 if (!safeEnv.backends.onnx) safeEnv.backends.onnx = {};
 if (!safeEnv.backends.onnx.wasm) safeEnv.backends.onnx.wasm = {};
 safeEnv.backends.onnx.wasm.wasmPaths = new URL("../ort-wasm/", import.meta.url).toString();
+
+const isPackagedFileWorker =
+    typeof self !== "undefined" &&
+    typeof self.location?.protocol === "string" &&
+    self.location.protocol === "file:";
+
 // WASM multi-threading requires SharedArrayBuffer (needs Cross-Origin Isolation).
 // Fall back to single-threaded if SAB is not available to avoid Aborted() crash.
-const canMultiThread = typeof SharedArrayBuffer !== 'undefined';
+// Also stay single-threaded in packaged Electron `file:` workers because the
+// threaded ONNX runtime helper worker is not emitted next to the bundled worker asset.
+const canMultiThread = typeof SharedArrayBuffer !== 'undefined' && !isPackagedFileWorker;
 const maxThreads = canMultiThread && typeof navigator !== 'undefined' && navigator.hardwareConcurrency
     ? Math.min(navigator.hardwareConcurrency, 4)
     : 1;
@@ -60,18 +68,25 @@ class PipelineSingleton {
         if (this.loading) return this.loading;
 
         this.loading = (async () => {
-            const { device, dtype } = await resolveDevice();
-            self.postMessage({ type: "device", device });
+            try {
+                const { device, dtype } = await resolveDevice();
+                self.postMessage({ type: "device", device });
 
-            const inst = await pipeline("automatic-speech-recognition", model, {
-                progress_callback,
-                device,
-                dtype,
-            });
-            this.instance = inst;
-            this.currentModel = model;
-            this.loading = null;
-            return inst;
+                const inst = await pipeline("automatic-speech-recognition", model, {
+                    progress_callback,
+                    device,
+                    dtype,
+                });
+                this.instance = inst;
+                this.currentModel = model;
+                this.loading = null;
+                return inst;
+            } catch (error) {
+                this.instance = null;
+                this.currentModel = null;
+                this.loading = null;
+                throw error;
+            }
         })();
 
         return this.loading;

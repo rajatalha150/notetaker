@@ -1,20 +1,5 @@
 import type { RecordingMeta } from "../types";
-
-// ── Formatting Helpers ──
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-function formatDuration(ms: number): string {
-  const totalMin = Math.round(ms / 60000);
-  if (totalMin < 60) return `${totalMin} minutes`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${h}h ${m}m`;
-}
+import { formatTime, formatDuration, escapeHtml } from "../format";
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleString(undefined, {
@@ -200,6 +185,49 @@ export function getEmailDraftUrl(recording: RecordingMeta): string {
   return `mailto:?subject=${subject}&body=${body}`;
 }
 
+
+// ── Export: SRT subtitle format ──
+
+export function exportAsSRT(recording: RecordingMeta): string {
+  if (!recording.transcription) return "";
+  return recording.transcription.segments
+    .map((seg, i) => {
+      const start = formatSRTTime(seg.start);
+      const end = formatSRTTime(seg.end);
+      const speaker = seg.speaker ? `${seg.speaker}: ` : "";
+      return `${i + 1}\n${start} --> ${end}\n${speaker}${seg.text}`;
+    })
+    .join("\n\n");
+}
+
+function formatSRTTime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
+}
+
+// ── Export: VTT subtitle format ──
+
+export function exportAsVTT(recording: RecordingMeta): string {
+  if (!recording.transcription) return "";
+  const lines = ["WEBVTT", ""];
+  for (const seg of recording.transcription.segments) {
+    const start = formatVTTTime(seg.start);
+    const end = formatVTTTime(seg.end);
+    const speaker = seg.speaker ? `${seg.speaker}: ` : "";
+    lines.push(`${start} --> ${end}`);
+    lines.push(`${speaker}${seg.text}`);
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+function formatVTTTime(seconds: number): string {
+  return formatSRTTime(seconds).replace(",", ".");
+}
+
 // ── Download Utility (triggers browser save-as dialog) ──
 
 export function downloadTextFile(content: string, filename: string, mimeType = "text/plain") {
@@ -232,6 +260,3 @@ export async function copyRichHtml(html: string, fallbackText: string): Promise<
   }
 }
 
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}

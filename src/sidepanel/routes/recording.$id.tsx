@@ -34,13 +34,11 @@ export function RecordingDetailPage() {
   const sec = durationSec % 60;
 
   const handleTranscribe = async () => {
-    if (recording.filePath && recording.environment === "desktop") {
-      try {
-        await transcribeSavedRecording();
-        return;
-      } catch {
-        // Fall back to manual file selection when desktop IPC is unavailable.
-      }
+    try {
+      await transcribeSavedRecording();
+      return;
+    } catch {
+      // Fall back to manual file selection when a local asset is unavailable.
     }
 
     fileInputRef.current?.click();
@@ -123,9 +121,9 @@ export function RecordingDetailPage() {
 
       {!transcription && !isTranscribing && (
         <p className="text-xs text-gray-600">
-          {recording.filePath && recording.environment === "desktop"
+          {recording.environment === "desktop"
             ? "This desktop recording can be transcribed directly from the saved file."
-            : "Select the downloaded recording file to transcribe it."}
+            : "This recording can be transcribed directly if its audio is cached locally. Older recordings may still ask you to select the downloaded file."}
         </p>
       )}
 

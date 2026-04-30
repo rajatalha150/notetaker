@@ -135,6 +135,26 @@ export function getChatModels(provider?: Provider): ModelOption[] {
   return MODELS.filter((m) => m.capabilities.includes("chat") && (!provider || m.provider === provider));
 }
 
+export function getDefaultModel(
+  capability: "transcription" | "chat",
+  provider: Provider
+): ModelOption | undefined {
+  const models = capability === "transcription"
+    ? getTranscriptionModels(provider)
+    : getChatModels(provider);
+  return models.find((m) => m.isRecommended) ?? models[0];
+}
+
+export function getFastestModel(
+  capability: "transcription" | "chat",
+  provider: Provider
+): ModelOption | undefined {
+  const models = capability === "transcription"
+    ? getTranscriptionModels(provider)
+    : getChatModels(provider);
+  return [...models].sort((a, b) => (a.sizeMB ?? Number.MAX_SAFE_INTEGER) - (b.sizeMB ?? Number.MAX_SAFE_INTEGER))[0];
+}
+
 export function getProvidersWithCapability(capability: "transcription" | "chat"): Provider[] {
   const providers = new Set(MODELS.filter((m) => m.capabilities.includes(capability)).map((m) => m.provider));
   return [...providers];

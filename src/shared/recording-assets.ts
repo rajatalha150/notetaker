@@ -1,4 +1,5 @@
 import { getRecording } from "./storage/metadata";
+import { getRecordingAudioAsset } from "./storage/audio-assets";
 
 function getElectronDesktopApi() {
   const scope = globalThis as typeof globalThis & {
@@ -34,5 +35,15 @@ export async function getRecordingAudioFile(recordingId: string): Promise<File> 
     );
   }
 
-  throw new Error("Recording audio is not embedded in metadata. Select the file manually.");
+  const storedAudio = await getRecordingAudioAsset(recordingId);
+  if (storedAudio) {
+    const mimeType = meta.mimeType || storedAudio.type || "audio/webm";
+    return new File(
+      [storedAudio],
+      meta.filename || `${recordingId}.webm`,
+      { type: mimeType }
+    );
+  }
+
+  throw new Error("Recording audio is not cached locally. Select the file manually.");
 }

@@ -1,4 +1,5 @@
 import type { RecordingMeta } from "../types";
+import { deleteRecordingAudioAsset } from "./audio-assets";
 
 const STORAGE_KEY = "recordings";
 
@@ -25,6 +26,11 @@ export async function saveRecording(meta: RecordingMeta) {
 
 export async function deleteRecording(id: string) {
   const all = await getAllRecordings();
+  try {
+    await deleteRecordingAudioAsset(id);
+  } catch {
+    // best effort cleanup for extension-cached audio
+  }
   await chrome.storage.local.set({
     [STORAGE_KEY]: all.filter((r) => r.id !== id),
   });

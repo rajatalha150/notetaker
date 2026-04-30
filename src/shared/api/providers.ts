@@ -2,6 +2,7 @@ import { getSettings } from "../storage/settings";
 import type { Transcription, TranscriptionSegment } from "../types";
 
 const GPT4O_MODELS = ["gpt-4o-transcribe", "gpt-4o-mini-transcribe"];
+import { formatDuration } from "../format";
 
 function formatTimestamp(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -9,13 +10,6 @@ function formatTimestamp(seconds: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-function formatDuration(ms: number): string {
-  const totalMin = Math.round(ms / 60000);
-  if (totalMin < 60) return `${totalMin} minutes`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${h}h ${m}m`;
-}
 
 async function decodeAudioChannels(blob: Blob): Promise<{
   mono: Float32Array;
@@ -241,6 +235,89 @@ async function transcribeGroq(audioBlob: Blob, model: string, apiKey: string): P
 import TranscribeWorker from "./transcribeWorker?worker";
 let localWorker: Worker | null = null;
 
+function resetLocalTranscribeWorker() {
+  if (!localWorker) return;
+  try {
+    localWorker.terminate();
+  } catch {
+    // best effort
+  }
+  localWorker = null;
+}
+
+function getLocalTranscriptionTimeoutMs(model: string): number {
+  const m = model.toLowerCase();
+  if (m.includes("small")) return 510_000;
+  if (m.includes("base")) return 270_000;
+  return 210_000;
+}
+
+function normalizeTimestamp(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeLocalTranscriptionResult(
+  result: unknown,
+  durationSec: number
+): { fullText: string; segments: { start: number; end: number; text: string }[] } {
+  if (typeof result === "string") {
+    const fullText = result.trim();
+    return {
+      fullText,
+      segments: fullText ? [{ start: 0, end: durationSec, text: fullText }] : [],
+    };
+  }
+
+  let fullText = "";
+  let rawChunks: unknown[] = [];
+
+  if (result && typeof result === "object") {
+    if ("text" in result && typeof result.text === "string") {
+      fullText = result.text.trim();
+    }
+    if ("chunks" in result && Array.isArray(result.chunks)) {
+      rawChunks = result.chunks;
+    }
+  }
+
+  const segments = rawChunks
+    .map((chunk) => {
+      if (!chunk || typeof chunk !== "object") return null;
+      const item = chunk as {
+        text?: unknown;
+        timestamp?: unknown;
+        start?: unknown;
+        end?: unknown;
+      };
+
+      const text = typeof item.text === "string" ? item.text.trim() : "";
+      if (!text) return null;
+
+      const timestamp = Array.isArray(item.timestamp) ? item.timestamp : [];
+      const start = normalizeTimestamp(timestamp[0], normalizeTimestamp(item.start, 0));
+      const rawEnd = normalizeTimestamp(timestamp[1], normalizeTimestamp(item.end, durationSec));
+      const end = rawEnd > start
+        ? rawEnd
+        : Math.max(start, Math.min(durationSec || start + 5, start + 5));
+
+      return { start, end, text };
+    })
+    .filter((segment): segment is { start: number; end: number; text: string } => !!segment);
+
+  if (!fullText) {
+    fullText = segments.map((segment) => segment.text).join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  if (segments.length === 0 && fullText) {
+    return {
+      fullText,
+      segments: [{ start: 0, end: durationSec, text: fullText }],
+    };
+  }
+
+  return { fullText, segments };
+}
+
 /**
  * Transcribe locally using a SINGLE Whisper pass on mono audio,
  * then assign speakers via stereo channel energy analysis.
@@ -248,35 +325,91 @@ let localWorker: Worker | null = null;
  */
 async function transcribeLocal(audioBlob: Blob, model: string, hasMic?: boolean): Promise<Transcription> {
   const { mono, left, right, sampleRate } = await decodeAudioChannels(audioBlob);
+  const durationSec = mono.length / sampleRate;
 
   if (!localWorker) {
     localWorker = new TranscribeWorker();
   }
 
   // Single Whisper pass on mono audio
-  const result = await new Promise<{ fullText: string; segments: any[] }>((resolve, reject) => {
+  const result = await new Promise<{ fullText: string; segments: { start: number; end: number; text: string }[] }>((resolve, reject) => {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    let startupTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      localWorker?.removeEventListener("message", handler);
+      localWorker?.removeEventListener("error", errorHandler as EventListener);
+      localWorker?.removeEventListener("messageerror", messageErrorHandler as EventListener);
+      if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+      if (startupTimeoutHandle !== null) clearTimeout(startupTimeoutHandle);
+    };
+
     const handler = (e: MessageEvent) => {
-      const msg = e.data;
-      if (msg.type === "done") {
-        localWorker!.removeEventListener("message", handler);
-        const { result } = msg;
+      try {
+        if (startupTimeoutHandle !== null) {
+          clearTimeout(startupTimeoutHandle);
+          startupTimeoutHandle = null;
+        }
 
-        const fullText = (result.text || "").trim();
-        const segments = (result.chunks || []).map((c: any) => ({
-          start: c.timestamp?.[0] ?? 0,
-          end: c.timestamp?.[1] ?? ((c.timestamp?.[0] ?? 0) + 5),
-          text: (c.text || "").trim(),
-        }));
-
-        resolve({ fullText, segments });
-      } else if (msg.type === "error") {
-        localWorker!.removeEventListener("message", handler);
-        reject(new Error(msg.error));
+        const msg = e.data;
+        if (msg.type === "done") {
+          cleanup();
+          const normalized = normalizeLocalTranscriptionResult(msg.result, durationSec);
+          if (!normalized.fullText && normalized.segments.length === 0) {
+            resetLocalTranscribeWorker();
+            reject(new Error("Transcription returned an empty response. Try a different model or shorter recording."));
+            return;
+          }
+          resolve(normalized);
+        } else if (msg.type === "error") {
+          cleanup();
+          resetLocalTranscribeWorker();
+          reject(new Error(msg.error || "Local transcription error"));
+        }
+      } catch (error) {
+        cleanup();
+        resetLocalTranscribeWorker();
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     };
 
-    localWorker!.addEventListener("message", handler);
-    localWorker!.postMessage({ type: "transcribe", audio: mono, model });
+    const errorHandler = (event: ErrorEvent) => {
+      cleanup();
+      resetLocalTranscribeWorker();
+      reject(new Error(
+        event.message ||
+        "The local transcription worker crashed before it could start. Try again or switch providers."
+      ));
+    };
+
+    const messageErrorHandler = () => {
+      cleanup();
+      resetLocalTranscribeWorker();
+      reject(new Error("The local transcription worker returned an unreadable message."));
+    };
+
+    localWorker?.addEventListener("message", handler);
+    localWorker?.addEventListener("error", errorHandler as EventListener);
+    localWorker?.addEventListener("messageerror", messageErrorHandler as EventListener);
+
+    startupTimeoutHandle = setTimeout(() => {
+      cleanup();
+      resetLocalTranscribeWorker();
+      reject(new Error(
+        "The local transcription worker never started. Try again, restart the app, or switch providers."
+      ));
+    }, 15_000);
+
+    timeoutHandle = setTimeout(() => {
+      cleanup();
+      resetLocalTranscribeWorker();
+      reject(new Error(
+        `Transcription timed out after ${Math.round(getLocalTranscriptionTimeoutMs(model) / 60_000)} minutes. ` +
+        "Try a smaller model (Whisper Tiny or Base) or a shorter recording."
+      ));
+    }, getLocalTranscriptionTimeoutMs(model));
+
+    localWorker?.postMessage({ type: "transcribe", audio: mono, model });
   });
 
   let finalSegments = result.segments;
@@ -398,6 +531,57 @@ export async function transcribe(audioBlob: Blob, hasMic?: boolean): Promise<Tra
 
 // ── Chat Completion ──
 
+function extractOpenAIStyleText(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+
+  return content
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && "text" in item && typeof item.text === "string") {
+        return item.text;
+      }
+      return "";
+    })
+    .join("")
+    .trim();
+}
+
+function extractAnthropicText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+
+  return content
+    .map((item) => (
+      item &&
+      typeof item === "object" &&
+      "type" in item &&
+      item.type === "text" &&
+      "text" in item &&
+      typeof item.text === "string"
+    )
+      ? item.text
+      : "")
+    .join("")
+    .trim();
+}
+
+function extractGeminiText(data: any): string {
+  const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+  for (const candidate of candidates) {
+    const parts = candidate?.content?.parts;
+    if (!Array.isArray(parts)) continue;
+
+    const text = parts
+      .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
+      .join("")
+      .trim();
+
+    if (text) return text;
+  }
+
+  return "";
+}
+
 async function chatOpenAI(prompt: string, model: string, apiKey: string, maxTokens: number): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -416,7 +600,9 @@ async function chatOpenAI(prompt: string, model: string, apiKey: string, maxToke
     throw new Error(`OpenAI API error: ${res.status} ${err}`);
   }
   const data = await res.json();
-  return data.choices[0].message.content;
+  const text = extractOpenAIStyleText(data.choices?.[0]?.message?.content);
+  if (!text) throw new Error(`OpenAI returned an empty response for model "${model}"`);
+  return text;
 }
 
 async function chatAnthropic(prompt: string, model: string, apiKey: string, maxTokens: number): Promise<string> {
@@ -439,7 +625,9 @@ async function chatAnthropic(prompt: string, model: string, apiKey: string, maxT
     throw new Error(`Anthropic API error: ${res.status} ${err}`);
   }
   const data = await res.json();
-  return data.content[0].text;
+  const text = extractAnthropicText(data.content);
+  if (!text) throw new Error(`Anthropic returned an empty response for model "${model}"`);
+  return text;
 }
 
 async function chatGemini(prompt: string, model: string, apiKey: string, maxTokens: number): Promise<string> {
@@ -459,7 +647,9 @@ async function chatGemini(prompt: string, model: string, apiKey: string, maxToke
     throw new Error(`Gemini API error: ${res.status} ${err}`);
   }
   const data = await res.json();
-  return data.candidates[0].content.parts[0].text;
+  const text = extractGeminiText(data);
+  if (!text) throw new Error(`Gemini returned an empty response for model "${model}"`);
+  return text;
 }
 
 async function chatGroq(prompt: string, model: string, apiKey: string, maxTokens: number): Promise<string> {
@@ -480,7 +670,9 @@ async function chatGroq(prompt: string, model: string, apiKey: string, maxTokens
     throw new Error(`Groq API error: ${res.status} ${err}`);
   }
   const data = await res.json();
-  return data.choices[0].message.content;
+  const text = extractOpenAIStyleText(data.choices?.[0]?.message?.content);
+  if (!text) throw new Error(`Groq returned an empty response for model "${model}"`);
+  return text;
 }
 
 async function chatTogether(prompt: string, model: string, apiKey: string, maxTokens: number): Promise<string> {
@@ -501,12 +693,48 @@ async function chatTogether(prompt: string, model: string, apiKey: string, maxTo
     throw new Error(`Together API error: ${res.status} ${err}`);
   }
   const data = await res.json();
-  return data.choices[0].message.content;
+  const text = extractOpenAIStyleText(data.choices?.[0]?.message?.content);
+  if (!text) throw new Error(`Together returned an empty response for model "${model}"`);
+  return text;
 }
 
 // @ts-expect-error Vite worker import
 import ChatWorker from "./chatWorker?worker";
 let localChatWorker: Worker | null = null;
+
+function resetLocalChatWorker() {
+  if (!localChatWorker) return;
+  try {
+    localChatWorker.terminate();
+  } catch {
+    // best effort
+  }
+  localChatWorker = null;
+}
+
+function normalizeLocalWorkerResult(result: unknown): string {
+  if (typeof result === "string") return result.trim();
+  if (Array.isArray(result)) {
+    return result
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "text" in item && typeof item.text === "string") {
+          return item.text;
+        }
+        if (item && typeof item === "object" && "content" in item && typeof item.content === "string") {
+          return item.content;
+        }
+        return "";
+      })
+      .join("")
+      .trim();
+  }
+  if (result && typeof result === "object") {
+    if ("text" in result && typeof result.text === "string") return result.text.trim();
+    if ("content" in result && typeof result.content === "string") return result.content.trim();
+  }
+  return "";
+}
 
 // Mirror the profile table from chatWorker so prompts are pre-trimmed before sending.
 // This prevents overflowing the model's context window before inference even starts.
@@ -562,33 +790,77 @@ async function chatLocal(prompt: string, model: string): Promise<string> {
 
   return new Promise((resolve, reject) => {
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    let startupTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
     const cleanup = () => {
       localChatWorker!.removeEventListener("message", handler);
+      localChatWorker!.removeEventListener("error", errorHandler as EventListener);
+      localChatWorker!.removeEventListener("messageerror", messageErrorHandler as EventListener);
       if (timeoutHandle !== null) clearTimeout(timeoutHandle);
+      if (startupTimeoutHandle !== null) clearTimeout(startupTimeoutHandle);
     };
 
     const handler = (e: MessageEvent) => {
-      const msg = e.data;
-      if (msg.type === "done") {
-        cleanup();
-        if (!msg.result || !msg.result.trim()) {
-          reject(new Error("Model returned an empty response. Try a different model."));
-        } else {
-          resolve(msg.result);
+      try {
+        if (startupTimeoutHandle !== null) {
+          clearTimeout(startupTimeoutHandle);
+          startupTimeoutHandle = null;
         }
-      } else if (msg.type === "error") {
+
+        const msg = e.data;
+        if (msg.type === "done") {
+          cleanup();
+          const text = normalizeLocalWorkerResult(msg.result);
+          if (!text) {
+            resetLocalChatWorker();
+            reject(new Error("Model returned an invalid or empty response. Try a different model."));
+          } else {
+            resolve(text);
+          }
+        } else if (msg.type === "error") {
+          cleanup();
+          resetLocalChatWorker();
+          reject(new Error(msg.error || "Local AI error"));
+        }
+      } catch (error) {
         cleanup();
-        reject(new Error(msg.error || "Local AI error"));
+        resetLocalChatWorker();
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
       // status/progress/device events are informational — ignored here
     };
 
+    const errorHandler = (event: ErrorEvent) => {
+      cleanup();
+      resetLocalChatWorker();
+      reject(new Error(
+        event.message ||
+        "The local summary worker crashed before it could start. Try again or switch models."
+      ));
+    };
+
+    const messageErrorHandler = () => {
+      cleanup();
+      resetLocalChatWorker();
+      reject(new Error("The local summary worker returned an unreadable message."));
+    };
+
     localChatWorker!.addEventListener("message", handler);
+    localChatWorker!.addEventListener("error", errorHandler as EventListener);
+    localChatWorker!.addEventListener("messageerror", messageErrorHandler as EventListener);
+
+    startupTimeoutHandle = setTimeout(() => {
+      cleanup();
+      resetLocalChatWorker();
+      reject(new Error(
+        "The local summary worker never started. Try again, restart the app, or switch providers."
+      ));
+    }, 15_000);
 
     // Client-side safety timeout (worker also has its own — this catches extreme hangs)
     timeoutHandle = setTimeout(() => {
       cleanup();
+      resetLocalChatWorker();
       reject(new Error(
         `Summarization timed out after ${Math.round(clientTimeoutMs / 1000)}s. ` +
         "Try a smaller model (e.g. SmolLM2 360M) or a shorter recording."
@@ -707,13 +979,18 @@ export async function summarizeTranscript(
   if (meta?.platform) metaLines.push(`Platform: ${meta.platform}`);
   const metaSection = metaLines.length > 0 ? `Meeting metadata:\n${metaLines.join("\n")}\n\n` : "";
 
-  const transcript = transcription.segments
+  const transcriptFromSegments = transcription.segments
     .map((s) => {
       const time = formatTimestamp(s.start);
       const speaker = s.speaker ? `${s.speaker}: ` : "";
       return `[${time}] ${speaker}${s.text}`;
     })
     .join("\n");
+  const transcript = transcriptFromSegments || transcription.fullText.trim();
+
+  if (!transcript && notes.length === 0) {
+    throw new Error("The transcription is empty. Re-transcribe before summarizing.");
+  }
 
   const notesSection =
     notes.length > 0
@@ -723,7 +1000,7 @@ export async function summarizeTranscript(
   const prompt = `You are summarizing a meeting transcript. Provide a structured summary in markdown format.
 
 ${metaSection}Transcript:
-${transcript}${notesSection}
+${transcript || "(No transcript text was available.)"}${notesSection}
 
 Please provide the summary with these sections:
 ## Overview

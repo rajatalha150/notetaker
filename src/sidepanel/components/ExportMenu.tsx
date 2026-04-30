@@ -8,6 +8,8 @@ import {
   downloadTextFile,
   copyRichHtml,
   getEmailDraftUrl,
+  exportAsSRT,
+  exportAsVTT,
 } from "@shared/api/export";
 
 interface ExportMenuProps {
@@ -127,6 +129,30 @@ export function ExportMenu({ recording }: ExportMenuProps) {
         const url = getEmailDraftUrl(rec);
         window.open(url, "_blank");
         showFeedback("Email draft opened!");
+      },
+    },
+    {
+      id: "srt",
+      label: "Download SRT Subtitles",
+      description: "Subtitle format for video editors",
+      icon: "🎬",
+      requiresTranscription: true,
+      action: (rec) => {
+        const srt = exportAsSRT(rec);
+        downloadTextFile(srt, `${safeFilename}.srt`, "text/plain");
+        showFeedback("SRT downloaded!");
+      },
+    },
+    {
+      id: "vtt",
+      label: "Download VTT Subtitles",
+      description: "Web subtitle format for HTML5 video",
+      icon: "🌐",
+      requiresTranscription: true,
+      action: (rec) => {
+        const vtt = exportAsVTT(rec);
+        downloadTextFile(vtt, `${safeFilename}.vtt`, "text/vtt");
+        showFeedback("VTT downloaded!");
       },
     },
   ];

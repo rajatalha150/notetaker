@@ -34,6 +34,22 @@ import { useSummary } from '@shared/hooks/useSummary'
 import type { RecordingMeta } from '@shared/types'
 import type { DesktopSource } from './electron'
 
+function formatErrorInfo(error: unknown) {
+  if (error instanceof Error) {
+    return error.stack || error.message
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
 function formatSpeakerEventTime(timestamp: number) {
   const totalSeconds = Math.max(0, Math.floor(timestamp / 1000))
   const hours = Math.floor(totalSeconds / 3600)
@@ -74,21 +90,21 @@ export function App() {
 
   useEffect(() => {
     const handleError = (e: ErrorEvent) => {
-      setErrorInfo(e.message + ' at ' + e.filename);
-    };
-    window.addEventListener('error', handleError);
-    return () => window.removeEventListener('error', handleError);
-  }, []);
+      const location = e.filename ? ` at ${e.filename}` : ''
+      setErrorInfo(`${e.message}${location}`)
+    }
 
-  if (errorInfo) {
-    return (
-      <div className="p-10 bg-black text-red-500 font-mono text-xs overflow-auto h-screen">
-        <h1 className="text-xl font-bold mb-4">ENGINE ERROR</h1>
-        <p className="bg-red-950/20 p-4 border border-red-900 rounded-lg">{errorInfo}</p>
-        <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-white text-black font-bold rounded">Restart UI</button>
-      </div>
-    );
-  }
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      setErrorInfo(formatErrorInfo(event.reason))
+    }
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection)
+    return () => {
+      window.removeEventListener('error', handleError)
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection)
+    }
+  }, [])
 
   // Hooks for AI
   const {
@@ -175,7 +191,7 @@ export function App() {
       const source = sources.find((item) => item.id === selectedSource)
       await startRecording(selectedSource, captureMic, source?.name)
     } catch (error) {
-      setErrorInfo(error instanceof Error ? error.message : String(error))
+      setErrorInfo(formatErrorInfo(error))
     }
   }
 
@@ -191,15 +207,15 @@ export function App() {
       }
       loadRecordings()
     } catch (error) {
-      setErrorInfo(error instanceof Error ? error.message : String(error))
+      setErrorInfo(formatErrorInfo(error))
     }
   }
 
   const handleTranscribe = async () => {
     try {
       await transcribeSavedRecording()
-    } catch (error) {
-      setErrorInfo(error instanceof Error ? error.message : String(error))
+    } catch {
+      // Recoverable transcription failures are surfaced inline via transcriptionError.
     }
   }
 
@@ -213,7 +229,7 @@ export function App() {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
       setPreviewUrl(url)
     } catch (error) {
-      setErrorInfo(error instanceof Error ? error.message : String(error))
+      setErrorInfo(formatErrorInfo(error))
     } finally {
       setIsLoadingPreview(false)
     }
@@ -262,8 +278,31 @@ export function App() {
       setSelectedRecording(updated)
       loadRecordings()
     } catch (error) {
-      setErrorInfo(error instanceof Error ? error.message : String(error))
+      setErrorInfo(formatErrorInfo(error))
     }
+  }
+
+  if (errorInfo) {
+    return (
+      <div className="p-10 bg-black text-red-500 font-mono text-xs overflow-auto h-screen">
+        <h1 className="text-xl font-bold mb-4">ENGINE ERROR</h1>
+        <p className="bg-red-950/20 p-4 border border-red-900 rounded-lg whitespace-pre-wrap">{errorInfo}</p>
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={() => setErrorInfo(null)}
+            className="px-4 py-2 bg-gray-900 text-white font-bold rounded border border-gray-800"
+          >
+            Dismiss
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-white text-black font-bold rounded"
+          >
+            Restart UI
+          </button>
+        </div>
+      </div>
+    )
   }
 
   const detectedNames = selectedRecording?.detectedParticipantNames ?? []

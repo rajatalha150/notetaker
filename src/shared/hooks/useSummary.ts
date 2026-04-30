@@ -34,6 +34,8 @@ export function useSummary(recordingId: string | undefined) {
         await saveRecording(meta);
       }
       qc.invalidateQueries({ queryKey: ["summary", recordingId] });
+      qc.invalidateQueries({ queryKey: ["recording", recordingId] });
+      qc.invalidateQueries({ queryKey: ["recordings"] });
     },
   });
 

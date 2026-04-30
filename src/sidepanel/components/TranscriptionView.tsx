@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { Transcription } from "@shared/types";
+import { formatTime } from "@shared/format";
 
-const SPEAKER_COLORS: Record<string, string> = {};
 const COLOR_PALETTE = [
   "bg-blue-500/20 text-blue-300",
   "bg-green-500/20 text-green-300",
@@ -10,19 +10,26 @@ const COLOR_PALETTE = [
   "bg-pink-500/20 text-pink-300",
   "bg-cyan-500/20 text-cyan-300",
 ];
-let colorIndex = 0;
 
-function getSpeakerColor(speaker: string): string {
-  const existing = SPEAKER_COLORS[speaker];
-  if (existing) return existing;
-  const color = COLOR_PALETTE[colorIndex % COLOR_PALETTE.length]!;
-  SPEAKER_COLORS[speaker] = color;
-  colorIndex++;
-  return color;
+function useSpeakerColors() {
+  // Scoped per component instance — resets when component unmounts/remounts.
+  // Colors are consistent within a single view.
+  return useMemo(() => {
+    const colorMap: Record<string, string> = {};
+    let index = 0;
+    return (speaker: string): string => {
+      if (!colorMap[speaker]) {
+        colorMap[speaker] = COLOR_PALETTE[index % COLOR_PALETTE.length]!;
+        index++;
+      }
+      return colorMap[speaker]!;
+    };
+  }, []);
 }
 
 export function TranscriptionView({ transcription }: { transcription?: Transcription }) {
   const [copied, setCopied] = useState(false);
+  const getSpeakerColor = useSpeakerColors();
 
   if (!transcription) return null;
 
@@ -59,10 +66,4 @@ export function TranscriptionView({ transcription }: { transcription?: Transcrip
       </div>
     </div>
   );
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }

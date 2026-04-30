@@ -17,19 +17,21 @@ export async function handleMessage(
 ): Promise<unknown> {
   switch (msg.type) {
     case "START_RECORDING": {
-      const recordingId = await startRecording(msg.tabId, msg.captureMic);
+      const result = await startRecording(msg.tabId, msg.captureMic);
       const now = Date.now();
       await saveRecording({
-        id: recordingId,
+        id: result.recordingId,
         title: `Recording ${new Date(now).toLocaleString()}`,
         startedAt: now,
         duration: 0,
         status: "recording",
+        environment: "extension",
+        captureMic: result.captureMic,
         notes: [],
         speakerEvents: [],
       });
-      broadcast({ type: "RECORDING_STARTED", recordingId });
-      return { recordingId };
+      broadcast({ type: "RECORDING_STARTED", recordingId: result.recordingId });
+      return { recordingId: result.recordingId };
     }
  
     case "PLATFORM_DETECTED": {
@@ -87,10 +89,12 @@ export async function handleMessage(
         const meta = await getRecording(result.recordingId);
         if (meta) {
           meta.status = "stopped";
+          meta.environment = "extension";
           meta.stoppedAt = Date.now();
           meta.duration = duration;
           meta.downloadId = result.downloadId;
           meta.filename = result.filename;
+          meta.mimeType = result.mimeType;
           await saveRecording(meta);
         }
         broadcast({ type: "RECORDING_STOPPED", recordingId: result.recordingId });

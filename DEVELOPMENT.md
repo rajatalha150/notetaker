@@ -25,6 +25,8 @@ The heart of the project is `src/shared/`. We follow a **Shared-First** philosop
 - **`src/shared/storage/`**: Handles metadata persistence. The same storage API is used in both environments, while Desktop uses a `chrome-shim` for metadata/settings and Electron-managed files for the raw recording assets.
 - **`src/shared/hooks/`**: React hooks for transcription, summarization, and audio handling.
 - **`src/shared/api/`**: Includes optimized WASM workers for on-device AI.
+- **`src/shared/format.ts`**: Consolidated formatting utilities (`formatTime`, `formatDuration`, `formatClock`, `escapeHtml`, `renderMarkdown`) shared across all UI surfaces to eliminate duplication.
+- **`src/shared/confirm-dialog.tsx`**: Reusable confirmation dialog component used for destructive actions like recording deletion, replacing ad-hoc `window.confirm` calls.
 
 ## Local AI Architecture
 
@@ -63,8 +65,42 @@ This runs Vite with the root `vite.config.ts`. Output is in `dist/`.
 ```bash
 cd electron-app
 npm run build
+
+# Build specific Linux targets
+npm run build:deb       # .deb package only
+npm run build:appimage  # AppImage only
+npm run build:linux     # Both .deb and AppImage
 ```
 This compiles the TypeScript main process, bundles the renderer with Vite, and then uses `electron-builder` to package the final binary.
+
+## Export Pipeline
+
+The export system lives in `src/shared/api/export.ts` and is surfaced through the `ExportMenu` component in the sidepanel and desktop app. Available export formats:
+
+| Format | Description |
+|--------|-------------|
+| **Markdown** | Full meeting report (.md) |
+| **JSON** | Structured machine-readable data (.json) |
+| **Rich HTML** | Formatted clipboard copy for Slack/Email/Docs |
+| **Plain Text** | Clean transcript with timestamps (.txt) |
+| **SRT** | SubRip subtitle format for video editors (.srt) |
+| **VTT** | WebVTT subtitle format for HTML5 video (.vtt) |
+| **Action Items** | Extracted action items from summary |
+| **Email Draft** | Pre-filled email via `mailto:` link |
+
+All exports are generated entirely locally with no data sent to external services.
+
+## Shared Utility Modules
+
+| Module | Description |
+|--------|-------------|
+| `src/shared/format.ts` | Consolidated formatting functions used across all UI surfaces |
+| `src/shared/confirm-dialog.tsx` | Reusable modal confirmation dialog for destructive actions |
+| `src/shared/error-boundary.tsx` | React error boundary for catching rendering errors |
+
+## Permissions Page
+
+The microphone permissions page (`src/permissions/`) has a polished dark UI with the Notetaker brand styling. It handles the full permission lifecycle: requesting access, detecting granted/denied states, and automatically starting the recording once permission is granted.
 
 ## Current Desktop State
 

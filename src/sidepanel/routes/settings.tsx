@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { getSettings, saveSettings } from "@shared/storage/settings";
+import { getSettings, normalizeSettings, saveSettings } from "@shared/storage/settings";
 import type { Settings, Provider } from "@shared/types";
 import { DEFAULT_SETTINGS } from "@shared/types";
-import { getTranscriptionModels, getChatModels, getProvidersWithCapability } from "@shared/api/models";
+import { getTranscriptionModels, getChatModels, getProvidersWithCapability, getDefaultModel, getFastestModel } from "@shared/api/models";
 
 const PROVIDER_LABELS: Record<Provider, string> = {
   openai: "OpenAI",
@@ -51,17 +51,21 @@ export function SettingsPage() {
   };
 
   const updateProvider = (provider: Provider, value: string) => {
-    setSettings((s) => ({
-      ...s,
-      providers: { ...s.providers, [provider]: value || undefined },
-    }));
+    setSettings((s) =>
+      normalizeSettings({
+        ...s,
+        providers: { ...s.providers, [provider]: value || undefined },
+      })
+    );
   };
 
   const updateProviderEnabled = (provider: Provider, enabled: boolean) => {
-    setSettings((s) => ({
-      ...s,
-      providersEnabled: { ...(s.providersEnabled || {}), [provider]: enabled },
-    }));
+    setSettings((s) =>
+      normalizeSettings({
+        ...s,
+        providersEnabled: { ...(s.providersEnabled || {}), [provider]: enabled },
+      })
+    );
   };
 
   const toggleCloudProviders = (enabled: boolean) => {
@@ -69,11 +73,13 @@ export function SettingsPage() {
       const updates: Partial<Settings> = { enableCloudProviders: enabled };
       if (!enabled) {
         updates.transcriptionProvider = "local";
-        updates.transcriptionModel = getTranscriptionModels("local")[0]?.id || "onnx-community/whisper-tiny";
+        updates.transcriptionModel =
+          getDefaultModel("transcription", "local")?.id || "onnx-community/whisper-tiny";
         updates.summarizationProvider = "local";
-        updates.summarizationModel = getChatModels("local")[0]?.id || "onnx-community/Qwen2.5-0.5B-Instruct";
+        updates.summarizationModel =
+          getDefaultModel("chat", "local")?.id || "onnx-community/Qwen2.5-0.5B-Instruct";
       }
-      return { ...s, ...updates } as Settings;
+      return normalizeSettings({ ...s, ...updates } as Settings);
     });
   };
 
@@ -94,6 +100,20 @@ export function SettingsPage() {
 
   const transcriptionModels = getTranscriptionModels(settings.transcriptionProvider);
   const summarizationModels = getChatModels(settings.summarizationProvider);
+  const usingLocalOnly = !settings.enableCloudProviders || configuredProviders.length === 0;
+
+  const applyFastLocalPreset = () => {
+    setSettings((s) =>
+      normalizeSettings({
+        ...s,
+        enableCloudProviders: false,
+        transcriptionProvider: "local",
+        transcriptionModel: getFastestModel("transcription", "local")?.id ?? "onnx-community/whisper-tiny",
+        summarizationProvider: "local",
+        summarizationModel: getFastestModel("chat", "local")?.id ?? "HuggingFaceTB/SmolLM2-360M-Instruct",
+      })
+    );
+  };
 
   return (
     <div className="max-w-md space-y-6 animate-fade-in">
@@ -107,6 +127,20 @@ export function SettingsPage() {
           Runs 100% on your device — private &amp; free. Model files are downloaded once and cached automatically the first time you transcribe or summarize.
         </p>
 
+        {usingLocalOnly && (
+          <div className="mb-3 rounded-lg border border-amber-700/40 bg-amber-500/10 p-3">
+            <p className="text-[11px] font-medium text-amber-200">
+              Desktop is currently using on-device AI only. Transcription and summary can take a while, especially the first time while models download.
+            </p>
+            <button
+              onClick={applyFastLocalPreset}
+              className="mt-2 rounded-md bg-amber-300 px-2.5 py-1.5 text-[11px] font-semibold text-black hover:bg-amber-200 transition-colors"
+            >
+              Use Fastest Local Models
+            </button>
+          </div>
+        )}
+
         <div className="space-y-3 bg-gray-900/50 rounded-lg p-4 border border-gray-800/50">
           {/* Transcription model */}
           <div>
@@ -114,11 +148,13 @@ export function SettingsPage() {
             <select
               value={settings.transcriptionProvider === "local" ? settings.transcriptionModel : ""}
               onChange={(e) =>
-                setSettings((s) => ({
-                  ...s,
-                  transcriptionProvider: "local",
-                  transcriptionModel: e.target.value,
-                }))
+                setSettings((s) =>
+                  normalizeSettings({
+                    ...s,
+                    transcriptionProvider: "local",
+                    transcriptionModel: e.target.value,
+                  })
+                )
               }
               className={selectClass}
             >
@@ -147,11 +183,13 @@ export function SettingsPage() {
             <select
               value={settings.summarizationProvider === "local" ? settings.summarizationModel : ""}
               onChange={(e) =>
-                setSettings((s) => ({
-                  ...s,
-                  summarizationProvider: "local",
-                  summarizationModel: e.target.value,
-                }))
+                setSettings((s) =>
+                  normalizeSettings({
+                    ...s,
+                    summarizationProvider: "local",
+                    summarizationModel: e.target.value,
+                  })
+                )
               }
               className={selectClass}
             >
@@ -270,12 +308,13 @@ export function SettingsPage() {
                 value={settings.transcriptionProvider}
                 onChange={(e) => {
                   const p = e.target.value as Provider;
-                  const models = getTranscriptionModels(p);
-                  setSettings((s) => ({
-                    ...s,
-                    transcriptionProvider: p,
-                    transcriptionModel: models[0]?.id ?? "",
-                  }));
+                  setSettings((s) =>
+                    normalizeSettings({
+                      ...s,
+                      transcriptionProvider: p,
+                      transcriptionModel: getDefaultModel("transcription", p)?.id ?? "",
+                    })
+                  );
                 }}
                 className={selectClass}
               >
@@ -288,7 +327,11 @@ export function SettingsPage() {
               {transcriptionModels.length > 1 && (
                 <select
                   value={settings.transcriptionModel}
-                  onChange={(e) => setSettings((s) => ({ ...s, transcriptionModel: e.target.value }))}
+                  onChange={(e) =>
+                    setSettings((s) =>
+                      normalizeSettings({ ...s, transcriptionModel: e.target.value })
+                    )
+                  }
                   className={`${selectClass} mt-1.5`}
                 >
                   {transcriptionModels.map((m) => (
@@ -306,12 +349,13 @@ export function SettingsPage() {
                 value={settings.summarizationProvider}
                 onChange={(e) => {
                   const p = e.target.value as Provider;
-                  const models = getChatModels(p);
-                  setSettings((s) => ({
-                    ...s,
-                    summarizationProvider: p,
-                    summarizationModel: models[0]?.id ?? "",
-                  }));
+                  setSettings((s) =>
+                    normalizeSettings({
+                      ...s,
+                      summarizationProvider: p,
+                      summarizationModel: getDefaultModel("chat", p)?.id ?? "",
+                    })
+                  );
                 }}
                 className={selectClass}
               >
@@ -325,7 +369,9 @@ export function SettingsPage() {
                 <select
                   value={settings.summarizationModel}
                   onChange={(e) =>
-                    setSettings((s) => ({ ...s, summarizationModel: e.target.value }))
+                    setSettings((s) =>
+                      normalizeSettings({ ...s, summarizationModel: e.target.value })
+                    )
                   }
                   className={`${selectClass} mt-1.5`}
                 >

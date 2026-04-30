@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNotes } from "@shared/hooks/useNotes";
+import { formatTimestamp } from "@shared/format";
 
 export function QuickNotes({ recordingId }: { recordingId: string | undefined }) {
   const { notes, addNote, isAdding } = useNotes(recordingId);
@@ -46,11 +47,4 @@ export function QuickNotes({ recordingId }: { recordingId: string | undefined })
       )}
     </div>
   );
-}
-
-function formatTimestamp(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }

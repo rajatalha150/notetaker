@@ -43,7 +43,7 @@ function sendToOffscreen(msg: Record<string, unknown>) {
 export async function startRecording(
   tabId: number,
   captureMic: boolean
-): Promise<string> {
+): Promise<{ recordingId: string; captureMic: boolean }> {
   if (state) throw new Error("Already recording");
 
   const recordingId = crypto.randomUUID();
@@ -74,7 +74,7 @@ export async function startRecording(
     pausedDuration: 0,
   };
 
-  return recordingId;
+  return { recordingId, captureMic };
 }
 
 export async function pauseRecording() {
@@ -94,31 +94,39 @@ export async function resumeRecording() {
   }
 }
 
+export interface StartResult {
+  recordingId: string;
+  captureMic: boolean;
+}
+
 export interface StopResult {
   recordingId: string;
   downloadId: number;
   filename: string;
+  mimeType: string;
 }
 
 export async function stopRecording(): Promise<StopResult | null> {
   if (!state) return null;
   const recordingId = state.recordingId;
-  const result = (await sendToOffscreen({ type: "OFFSCREEN_STOP" })) as {
-    dataUrl?: string;
+  // Offscreen document now handles the download directly (avoids 64KB message limit).
+  // It returns the downloadId it got from chrome.downloads.download.
+  const result = (await sendToOffscreen({ type: "OFFSCREEN_STOP", recordingId })) as {
+    mimeType?: string;
+    downloadId?: number;
     error?: string;
   };
   state = null;
 
-  if (!result?.dataUrl) return null;
+  if (result?.error) return null;
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `notetaker-${timestamp}.webm`;
 
-  const downloadId = await chrome.downloads.download({
-    url: result.dataUrl,
+  return {
+    recordingId,
+    downloadId: result?.downloadId ?? 0,
     filename,
-    saveAs: false,
-  });
-
-  return { recordingId, downloadId, filename };
+    mimeType: result?.mimeType || "audio/webm",
+  };
 }

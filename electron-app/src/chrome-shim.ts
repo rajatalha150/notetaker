@@ -11,6 +11,13 @@ if (typeof window !== 'undefined') {
 
   const listeners = new Set<ChromeMessageListener>();
 
+  // Tracks the active recording ID on desktop (no background worker).
+  // Set by useDesktopRecorder when a recording starts/stops.
+  let _activeDesktopRecordingId: string | null = null;
+  (scope as any).__setActiveDesktopRecordingId = (id: string | null) => {
+    _activeDesktopRecordingId = id;
+  };
+
   if (!scope.chrome.storage) {
     scope.chrome.storage = {};
   }
@@ -68,6 +75,27 @@ if (typeof window !== 'undefined') {
       isElectron: true,
       sendMessage: async (message: unknown) => {
         const sender = { id: 'notetaker-electron-shim', origin: window.location.origin };
+        const msg = message as Record<string, unknown>;
+
+        // Handle ADD_NOTE directly (no background worker on desktop)
+        if (msg?.type === 'ADD_NOTE') {
+          const activeId = _activeDesktopRecordingId;
+          if (!activeId) return { error: 'Not recording' };
+          const raw = localStorage.getItem('recordings');
+          const recordings: any[] = raw ? JSON.parse(raw) : [];
+          const idx = recordings.findIndex((r: any) => r.id === activeId);
+          if (idx < 0) return { error: 'Recording not found' };
+          const note = {
+            id: crypto.randomUUID(),
+            text: msg.text as string,
+            timestamp: Date.now() - (recordings[idx]?.startedAt ?? Date.now()),
+            createdAt: Date.now(),
+          };
+          if (!recordings[idx].notes) recordings[idx].notes = [];
+          recordings[idx].notes.push(note);
+          localStorage.setItem('recordings', JSON.stringify(recordings));
+          return { note };
+        }
 
         for (const listener of listeners) {
           const response = await new Promise<unknown>((resolve) => {
@@ -103,3 +131,4 @@ if (typeof window !== 'undefined') {
     };
   }
 }
+

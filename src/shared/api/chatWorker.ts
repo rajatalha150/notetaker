@@ -10,9 +10,17 @@ if (!safeEnv.backends) safeEnv.backends = {};
 if (!safeEnv.backends.onnx) safeEnv.backends.onnx = {};
 if (!safeEnv.backends.onnx.wasm) safeEnv.backends.onnx.wasm = {};
 safeEnv.backends.onnx.wasm.wasmPaths = new URL("../ort-wasm/", import.meta.url).toString();
+
+const isPackagedFileWorker =
+    typeof self !== "undefined" &&
+    typeof self.location?.protocol === "string" &&
+    self.location.protocol === "file:";
+
 // WASM multi-threading requires SharedArrayBuffer (needs Cross-Origin Isolation).
 // Fall back to single-threaded if SAB is not available to avoid Aborted() crash.
-const canMultiThread = typeof SharedArrayBuffer !== 'undefined';
+// Also stay single-threaded in packaged Electron `file:` workers because the
+// threaded ONNX runtime helper worker is not emitted next to the bundled worker asset.
+const canMultiThread = typeof SharedArrayBuffer !== 'undefined' && !isPackagedFileWorker;
 const maxThreads = canMultiThread && typeof navigator !== 'undefined' && navigator.hardwareConcurrency
     ? Math.min(navigator.hardwareConcurrency, 4)
     : 1;
@@ -65,6 +73,33 @@ function getModelProfile(model: string): {
     return { maxPromptChars: 3000, maxNewTokens: 512, timeoutMs: 300_000 };
 }
 
+function normalizeGeneratedText(result: any): string {
+    const generated = result?.[0]?.generated_text;
+
+    if (typeof generated === "string") {
+        return generated.trim();
+    }
+
+    if (Array.isArray(generated)) {
+        const last = generated[generated.length - 1];
+        if (typeof last === "string") return last.trim();
+        if (last && typeof last.content === "string") return last.content.trim();
+        if (Array.isArray(last?.content)) {
+            return last.content
+                .map((item: any) => typeof item?.text === "string" ? item.text : "")
+                .join("")
+                .trim();
+        }
+    }
+
+    if (generated && typeof generated === "object") {
+        if (typeof generated.text === "string") return generated.text.trim();
+        if (typeof generated.content === "string") return generated.content.trim();
+    }
+
+    return "";
+}
+
 class PipelineSingleton {
     static instance: any = null;
     static currentModel: string | null = null;
@@ -84,18 +119,25 @@ class PipelineSingleton {
         if (this.loading) return this.loading;
 
         this.loading = (async () => {
-            const { device, dtype } = await resolveDevice();
-            self.postMessage({ type: "device", device });
+            try {
+                const { device, dtype } = await resolveDevice();
+                self.postMessage({ type: "device", device });
 
-            const inst = await pipeline("text-generation", model, {
-                progress_callback,
-                device,
-                dtype,
-            });
-            this.instance = inst;
-            this.currentModel = model;
-            this.loading = null;
-            return inst;
+                const inst = await pipeline("text-generation", model, {
+                    progress_callback,
+                    device,
+                    dtype,
+                });
+                this.instance = inst;
+                this.currentModel = model;
+                this.loading = null;
+                return inst;
+            } catch (error) {
+                this.instance = null;
+                this.currentModel = null;
+                this.loading = null;
+                throw error;
+            }
         })();
 
         return this.loading;
@@ -149,12 +191,7 @@ self.addEventListener("message", async (e: MessageEvent) => {
 
             if (timeoutHandle !== null) clearTimeout(timeoutHandle);
 
-            let outputText = (result as any)[0].generated_text;
-            if (Array.isArray(outputText)) {
-                outputText = outputText[outputText.length - 1].content || "";
-            } else if (typeof outputText === "string") {
-                outputText = outputText.trim();
-            }
+            const outputText = normalizeGeneratedText(result);
 
             if (!outputText) {
                 throw new Error("Model returned an empty response. Try a different model.");

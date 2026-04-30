@@ -1,12 +1,6 @@
 import { useState } from "react";
 import type { Note } from "@shared/types";
-
-function formatTimestamp(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-}
+import { formatTimestamp } from "@shared/format";
 
 export function NotesEditor({ notes }: { notes: Note[] }) {
   const [copied, setCopied] = useState(false);

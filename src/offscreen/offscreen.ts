@@ -1,5 +1,7 @@
 // Offscreen document: has DOM/media APIs that the service worker lacks.
-// Collects audio chunks in memory, on stop sends a data URL back to background for download.
+// Collects audio chunks in memory, on stop saves to IndexedDB and triggers download directly.
+
+import { saveRecordingAudioAsset } from "@shared/storage/audio-assets";
 
 let recorder: MediaRecorder | null = null;
 let audioContext: AudioContext | null = null;
@@ -96,22 +98,53 @@ async function handleOffscreenMessage(msg: {
 
     case "OFFSCREEN_STOP": {
       if (!recorder || recorder.state === "inactive") {
-        return { error: "Not recording" };
+        return { error: "Not recording", mimeType };
       }
 
-      // Wait for recorder to finish and return the data URL
-      const dataUrl = await new Promise<string>((resolve) => {
+      // Wait for recorder to finish, persist the blob for later transcription,
+      // then trigger download directly from the offscreen document.
+      // Avoids sending large data URLs through chrome.runtime.sendMessage (64KB limit).
+      const result = await new Promise<{ mimeType: string; downloadId?: number }>((resolve, reject) => {
         recorder!.onstop = () => {
           const blob = new Blob(chunks, { type: mimeType });
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-          cleanupStreams();
+          const blobUrl = URL.createObjectURL(blob);
+
+          void (async () => {
+            try {
+              // 1. Cache audio in IndexedDB for later transcription
+              if (msg.recordingId) {
+                try {
+                  await saveRecordingAudioAsset(msg.recordingId, blob);
+                } catch (error) {
+                  console.warn("Failed to cache recording audio locally:", error);
+                }
+              }
+
+              // 2. Trigger download directly from offscreen document.
+              //    Object URLs are scoped to this document context, so we must call
+              //    chrome.downloads.download from here, not from the service worker.
+              const downloadId = await chrome.downloads.download({
+                url: blobUrl,
+                filename: `notetaker-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`,
+                saveAs: false,
+              });
+
+              // 3. Revoke the object URL after download has had time to start
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
+
+              cleanupStreams();
+              resolve({ mimeType: blob.type || mimeType, downloadId });
+            } catch (err) {
+              cleanupStreams();
+              URL.revokeObjectURL(blobUrl);
+              reject(err);
+            }
+          })();
         };
         recorder!.stop();
       });
 
-      return { dataUrl };
+      return result;
     }
 
     case "OFFSCREEN_PAUSE": {

@@ -1,13 +1,6 @@
 import type { RecordingStatus } from "@shared/types";
 
-function formatDuration(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
-}
+import { formatClock } from "@shared/format";
 
 export function StatusIndicator({
   status,
@@ -43,7 +36,7 @@ export function StatusIndicator({
       <span className={`text-xs font-medium ${labelColors[status]}`}>{labels[status]}</span>
       {status !== "idle" && (
         <span className="ml-auto text-sm font-mono text-gray-300 tabular-nums">
-          {formatDuration(duration)}
+          {formatClock(duration)}
         </span>
       )}
     </div>

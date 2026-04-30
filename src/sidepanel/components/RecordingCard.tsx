@@ -1,4 +1,6 @@
 import type { RecordingMeta } from "@shared/types";
+import { useState } from "react";
+import { ConfirmDialog } from "@shared/confirm-dialog";
 
 export function RecordingCard({
   recording,
@@ -7,6 +9,7 @@ export function RecordingCard({
   recording: RecordingMeta;
   onDelete: () => void;
 }) {
+  const [showConfirm, setShowConfirm] = useState(false);
   const durationSec = Math.floor(recording.duration / 1000);
   const min = Math.floor(durationSec / 60);
   const sec = durationSec % 60;
@@ -22,11 +25,27 @@ export function RecordingCard({
           </p>
         </div>
         <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(); }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setShowConfirm(true);
+          }}
           className="text-gray-700 hover:text-red-400 text-xs transition-colors opacity-0 group-hover:opacity-100 ml-2 shrink-0"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
         </button>
+        <ConfirmDialog
+          open={showConfirm}
+          title="Delete recording"
+          message="Are you sure you want to delete this recording? This cannot be undone."
+          confirmLabel="Delete"
+          variant="danger"
+          onConfirm={() => {
+            setShowConfirm(false);
+            onDelete();
+          }}
+          onCancel={() => setShowConfirm(false)}
+        />
       </div>
       {(recording.notes.length > 0 || recording.transcription || recording.summary) && (
         <div className="flex gap-1.5 mt-2">

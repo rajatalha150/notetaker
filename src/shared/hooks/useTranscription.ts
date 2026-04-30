@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { transcribe, diarizeSpeakers, mergeSpeakerEvents } from "../api/providers";
 import { getRecording, saveRecording } from "../storage/metadata";
@@ -6,6 +7,7 @@ import type { Transcription, TranscriptionSegment } from "../types";
 
 export function useTranscription(recordingId: string | undefined) {
   const qc = useQueryClient();
+  const [savedRecordingError, setSavedRecordingError] = useState<Error | null>(null);
 
   const { data: transcription } = useQuery({
     queryKey: ["transcription", recordingId],
@@ -19,9 +21,11 @@ export function useTranscription(recordingId: string | undefined) {
 
   const transcribeMutation = useMutation({
     mutationFn: async (audio: Blob) => {
+      setSavedRecordingError(null);
+
       // Find metadata first
       const meta = recordingId ? await getRecording(recordingId) : null;
-      const hasMic = meta ? typeof meta.userName === "string" : undefined;
+      const hasMic = meta ? meta.captureMic === true : undefined;
       
       // 1. Run transcription (Whisper + channel-based speaker assignment)
       const result = await transcribe(audio, hasMic);
@@ -87,13 +91,30 @@ export function useTranscription(recordingId: string | undefined) {
         await saveRecording(meta);
       }
       qc.invalidateQueries({ queryKey: ["transcription", recordingId] });
+      qc.invalidateQueries({ queryKey: ["recording", recordingId] });
+      qc.invalidateQueries({ queryKey: ["recordings"] });
     },
   });
 
   const transcribeSavedRecording = async () => {
-    if (!recordingId) throw new Error("No recording ID");
-    const file = await getRecordingAudioFile(recordingId);
-    transcribeMutation.mutate(file);
+    if (!recordingId) {
+      const error = new Error("No recording ID");
+      setSavedRecordingError(error);
+      throw error;
+    }
+
+    setSavedRecordingError(null);
+
+    let file: File;
+    try {
+      file = await getRecordingAudioFile(recordingId);
+    } catch (error) {
+      const normalized = error instanceof Error ? error : new Error(String(error));
+      setSavedRecordingError(normalized);
+      throw normalized;
+    }
+
+    return transcribeMutation.mutateAsync(file);
   };
 
   return {
@@ -101,6 +122,6 @@ export function useTranscription(recordingId: string | undefined) {
     transcribe: transcribeMutation.mutate,
     transcribeSavedRecording,
     isTranscribing: transcribeMutation.isPending,
-    transcriptionError: transcribeMutation.error,
+    transcriptionError: transcribeMutation.error ?? savedRecordingError,
   };
 }

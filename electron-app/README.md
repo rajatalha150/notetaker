@@ -20,7 +20,9 @@ Unlike the browser extension which is limited to capturing tab audio, **Notetake
 - **Hardware-Accelerated Local AI**: The desktop app leverages multi-threaded WASM workers (up to 4 CPU threads) for significantly faster on-device inference compared to single-threaded browser defaults.
 - **Deterministic Native Detection**: Before relying on manual hints, the desktop app attempts to derive platform and participant names from live native process/window metadata and UI automation first, then source/window titles, using app-specific parsing rules.
 - **Shared Metadata & Settings**: Reuses the shared metadata schema, settings UI, and AI hooks through the `chrome-shim`.
-- **Portable Distribution**: Packaged as a single `.AppImage` for Linux and `.exe` for Windows.
+- **Export Pipeline**: Full export support (Markdown, JSON, SRT, VTT, Rich HTML, Action Items, Email Draft) via shared components.
+- **Delete Confirmation**: Proper modal confirmation dialog for recording deletion — no accidental data loss.
+- **Portable Distribution**: Packaged as a single `.deb` or `.AppImage` for Linux and `.exe` for Windows.
 
 ## Development
 

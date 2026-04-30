@@ -11,9 +11,10 @@ A privacy-first AI meeting assistant that silently records, transcribes, and sum
 
 - **Browser Extension** — Silent recording for Google Meet, Zoom, and Microsoft Teams tabs. No participants are notified.
 - **Native Desktop App** — "Studio" environment to capture high-quality audio from native apps like **Skype**, **Zoom Desktop**, **WhatsApp**, and **Teams Native**, then save and reopen those captures directly from the desktop library.
-- **AI Transcription** — Timestamped text via OpenAI Whisper, Groq, or high-performance **Local Models** (100% on-device).
+- **AI Transcription** — Timestamped text via OpenAI Whisper, Groq, or high-performance **Local Models** (100% on-device). Supports SRT/VTT subtitle export.
 - **Speaker Detection** — Uses deterministic app data when available: browser DOM scraping on the extension side, and native window metadata parsing plus speaker-event monitoring on Desktop.
 - **AI Summarization** — Structured meeting summaries with action items and key decisions via **TinyLlama 1.1B** (Default Local) or Cloud LLMs.
+- **Export Pipeline** — Export meetings as Markdown, JSON, plain text, SRT/VTT subtitles, rich HTML clipboard, action items, or email drafts.
 - **Privacy First** — All audio stays on your hardware. Use Local AI (WASM) to ensure no data ever leaves your machine. TinyLlama 1.1B provides a powerful, privacy-first alternative for on-device summarization (~600MB).
 
 ---
@@ -90,6 +91,7 @@ npm run build
 |-------|-----------|
 | **Frontend** | React 19, TypeScript |
 | **Styling** | Tailwind CSS v4 (Modern HSL tokens) |
+| **Export** | Markdown, JSON, TXT, SRT, VTT, Rich HTML, Email Draft |
 | **State/Query** | TanStack Query & Router |
 | **Local AI** | Transformers.js (Whisper, TinyLlama 1.1B, Qwen, Phi-3) |
 | **Native Layer** | Electron, IPC, Node.js |
